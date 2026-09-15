@@ -244,6 +244,38 @@ try {
       .order("position"),
   );
   assert.equal(reordered[0].id, stages[1].id);
+  const added = await Promise.all(
+    ["References", "Offer"].map((name) =>
+      ok(mutate(currentAdmin, ca.id, "stage_save", { name, color: "blue" })),
+    ),
+  );
+  const appended = await ok(
+    admin
+      .from("hf_stages")
+      .select("id,position")
+      .eq("company_id", ca.id)
+      .order("position"),
+  );
+  assert.equal(
+    new Set(appended.map((s: { position: number }) => s.position)).size,
+    9,
+  );
+  assert.deepEqual(
+    new Set(appended.slice(-2).map((s: { id: string }) => s.id)),
+    new Set(added.map((s) => s.id)),
+  );
+  await ok(
+    mutate(currentAdmin, ca.id, "stage_save", {
+      id: stages[1].id,
+      name: "Phone interview",
+      color: "blue",
+      position: 99,
+    }),
+  );
+  const edited = await ok(
+    admin.from("hf_stages").select("position").eq("id", stages[1].id).single(),
+  );
+  assert.equal(edited.position, reordered[0].position);
   const application = {
     source_id: "lead-123",
     source: "Meta",

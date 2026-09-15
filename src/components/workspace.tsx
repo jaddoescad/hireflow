@@ -79,7 +79,9 @@ export function Workspace() {
     if (token) {
       setInvite(token);
       sessionStorage.setItem("hf_invitation", token);
-      history.replaceState(null, "", "/");
+      const cleanUrl = new URL(location.href);
+      cleanUrl.searchParams.delete("invite");
+      history.replaceState(null, "", `${cleanUrl.pathname}${cleanUrl.search}`);
     }
     if (!configured) {
       setLoading(false);
@@ -156,7 +158,7 @@ export function Workspace() {
       </div>
     );
   if (!signedIn)
-    return <Auth onSignedIn={() => void load(null)} invited={!!invite} />;
+    return <Auth onSignedIn={() => void load(null)} invited={invite} />;
   const companyModal = newCompany && (
     <Modal title="Create a company" onClose={() => setNewCompany(false)}>
       <form

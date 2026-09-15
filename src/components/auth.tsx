@@ -1,14 +1,15 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Mail, ShieldCheck } from "lucide-react";
 import { browserDb, configured } from "@/lib/supabase/client";
 import { Logo, Field } from "./primitives";
+import { authCallback } from "@/lib/auth-navigation";
 export function Auth({
   onSignedIn,
   invited,
 }: {
   onSignedIn: () => void;
-  invited: boolean;
+  invited: string;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,6 +19,12 @@ export function Auth({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has("auth_error"))
+      setError(
+        "That sign-in link could not be used. Request a new link or sign in with your password.",
+      );
+  }, []);
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -28,7 +35,7 @@ export function Auth({
       if (mode === "otp" && !sent) {
         const { error } = await db.auth.signInWithOtp({
           email,
-          options: { emailRedirectTo: `${location.origin}/auth/callback` },
+          options: { emailRedirectTo: authCallback(location.origin, invited) },
         });
         if (error) throw error;
         setSent(true);
@@ -45,7 +52,7 @@ export function Auth({
         const { data, error } = await db.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${location.origin}/auth/callback` },
+          options: { emailRedirectTo: authCallback(location.origin, invited) },
         });
         if (error) throw error;
         if (data.session) onSignedIn();

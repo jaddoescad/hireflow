@@ -4,6 +4,24 @@ import { createHmac } from "node:crypto";
 import { normalizePhone, intakeSchema } from "../src/lib/validation";
 import { verifyQuoSignature } from "../src/lib/crypto";
 import { parseQuoEvent } from "../src/lib/quo";
+import { authCallback, authDestination } from "../src/lib/auth-navigation";
+test("email authentication preserves invitation context when opened in a new tab", () => {
+  const token = "a".repeat(64);
+  const callback = new URL(authCallback("https://hiring.example.com", token));
+  const destination = authDestination(
+    callback.origin,
+    callback.searchParams.get("invite"),
+  );
+  assert.equal(callback.pathname, "/auth/callback");
+  assert.equal(
+    destination.toString(),
+    `https://hiring.example.com/?invite=${token}`,
+  );
+  assert.equal(
+    authDestination(callback.origin, "https://untrusted.example").toString(),
+    "https://hiring.example.com/",
+  );
+});
 test("phone and email normalization preserves international identity", () => {
   assert.equal(normalizePhone("(613) 555-0123"), "+16135550123");
   assert.equal(normalizePhone("+44 20 7946 0958"), "+442079460958");
