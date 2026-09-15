@@ -1,0 +1,7 @@
+# UI reference
+
+Generated with Codex's built-in image generation tool on September 15, 2026.
+
+Use case: ui-mockup. Generate one high-fidelity desktop UI concept sheet for HireFlow, a complete multi-company hiring CRM. Show main hiring workspace with slim left sidebar: HireFlow wordmark, Ottawa Painters company switcher dropdown, Hiring, Team, Settings. Main working surface is a horizontal hiring kanban, first dedicated Signals column with recent phone calls and SMS linked to named applicants, then Applied, Initial interview, Manager interview, Field trial, Hired stages. Include candidate cards with initials, job tags, experience, last-contact metadata. Show a right applicant detail panel with phone/email, stage selector, chronological Quo SMS and call history and notes. Also include two smaller coherent inset screens for company selection after login and Team members with invite email field, role admin/member, enable/disable controls. Clean professional precise software, dark navy sidebar, bright white workspace, blue accent, crisp readable typography, thin borders, purposeful density. No AI agents, no marketing hero, no decorative photography. Original design, not based on any existing CRM.
+
+Implementation notes: signals are a communication feed, never a hiring stage. Keep Rejected and Contact later available on the horizontally scrollable board. Use the company chooser and team membership patterns across all screens.

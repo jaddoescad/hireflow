@@ -1,0 +1,32 @@
+{
+  "name": "hireflow",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.116.0",
+    "libphonenumber-js": "1.13.13",
+    "lucide-react": "0.577.0",
+    "next": "16.3.5",
+    "nodemailer": "10.0.10",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.0",
+    "@types/nodemailer": "7.0.11",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3"
+  },
+  "type": "module"
+}
