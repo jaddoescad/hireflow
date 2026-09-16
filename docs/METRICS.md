@@ -7,8 +7,10 @@ Filters combine: date range, date basis, experience, role, intake source, curren
 ## Definitions
 
 - **Applications:** matching records, including repeat submissions.
-- **Unique contacts:** distinct trimmed, lowercased email addresses; phone is used when email is absent, otherwise the record ID. This is not verified identity deduplication, and does not merge or delete records.
-- **Repeat applications:** applications minus unique contact keys.
+The Applications card shows repeat submissions in its caption instead of separate contact-count cards.
+
+- **Contact counting:** distinct trimmed, lowercased email addresses; phone is used when email is absent, otherwise the record ID. This is not verified identity deduplication, and does not merge or delete records.
+- **Repeat applications note:** applications minus unique contact keys.
 - **Currently hired:** matching records in stages named Hired, with their share of the filtered records. This is a current-state share, not historical conversion.
 - **Application date:** the original `Applied at` calendar date when provided. New non-sheet leads without that field use their intake date. Historical sheet records without a valid date remain undated; they are counted in all-time totals but excluded by date filters and the trend.
 - **Added to HireFlow:** record creation date in UTC, including bulk imports.

@@ -275,12 +275,12 @@ export function Metrics({
       </section>
       <div className="metrics-summary" aria-live="polite">
         {[
-          ["Applications", filtered.length, "Matching application records"],
-          ["Unique contacts", unique, "By email, then phone if no email"],
           [
-            "Repeat applications",
-            filtered.length - unique,
-            "Records sharing the same contact key",
+            "Applications",
+            filtered.length,
+            filtered.length > unique
+              ? `Includes ${filtered.length - unique} repeat application${filtered.length - unique === 1 ? "" : "s"}`
+              : "No repeat applications",
           ],
           [
             "Currently hired",
