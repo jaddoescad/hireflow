@@ -3,8 +3,8 @@
 Verified September 15–16, 2026.
 
 - **Production:** https://hireflow-theta-seven.vercel.app
-- **Deployment:** `dpl_HX3xMCtVEQP6Biyg3VXVPc4tzYGP`, ready and aliased to production.
-- **Database and authentication:** dedicated HireFlow Supabase project `slpzezujtpjrxlugalqs`, Canada Central; all four migrations applied.
+- **Deployment:** `dpl_DvsPCrYj9Kx5srSncjkSFRhmfWGQ`, ready and aliased to production.
+- **Database and authentication:** dedicated HireFlow Supabase project `slpzezujtpjrxlugalqs`, Canada Central; foundation and Gmail migrations applied.
 - **Admin:** `info@paintersottawa.com`; both email-link and one-time-code login verified through the real Gmail inbox. The restored account has no migrated password and can use email sign-in.
 - **Sender:** `hireflow@homeproapps.com`, MXroute port 587, configured separately for Supabase Auth and application invitations. MX, SPF and DKIM verified. Fixed the MXroute local-delivery setting for paintersottawa.com to match its Google-hosted mailbox. Auth email limit: 30/hour. Leaked-password protection enabled; the security advisor reports no warnings. The two no-policy notices are expected for server-only integration and invitation tables.
 
@@ -42,3 +42,15 @@ The repository includes an MIT license, setup/contribution instructions, environ
 Kanban moves now update cards and counts immediately, serialize rapid writes per candidate, and preserve pending destinations through background refreshes. Save feedback, Undo, rollback with Retry, focused drop targets and edge scrolling are implemented. Local browser checks held save requests open and verified refresh, failure, retry and undo; production drag testing independently confirmed immediate placement before the request was released and persisted stage afterward. All synthetic test records were removed. Eight unit tests, TypeScript and production build pass.
 
 The combined deployment also includes the compact Chat-first candidate view from the parallel task. That task verified desktop/mobile presentation, server-side chat filtering before pagination and company authorization against production.
+
+
+## Gmail integration — deployed, mailbox authorization pending
+
+Deployment `dpl_DvsPCrYj9Kx5srSncjkSFRhmfWGQ` is **READY**, production, Next.js 16.3.5, commit `6a3f05a`; Vercel build completed in 14 seconds. Unique URL: https://hireflow-mjj3qhthx-jad-slims-projects.vercel.app. The canonical production alias points to it.
+
+- Email chat bubbles, incoming/sent matching, private resume downloads, unmatched-email linking and admin Gmail controls are implemented.
+- Fourteen unit tests, TypeScript and production build pass. Production HTTP/database checks pass for tenant isolation, disabled members, admin-only setup, private attachment downloads, matching, linking, deduplication, lease exclusion and disconnect invalidation. All synthetic fixtures were removed. The synthetic email conversation was visually inspected in the browser.
+- The database security advisor has no warnings/errors; its three informational notices are intentional server-only tables without client RLS policies.
+- Vercel Pro was verified. The five-minute production cron is registered; unauthenticated invocation returns 401 and authenticated invocation returns 200. Encryption and scheduler secrets are stored only in ignored local configuration and sensitive Vercel production variables.
+- **Not yet live for hiring@paintersottawa.com:** no Google OAuth client or mailbox grant exists. Google Cloud project creation requires selecting an existing billing account; a choice between “My Billing Account 1” and “My Maps Billing Account” was requested. The form is prepared for a dedicated “HireFlow Gmail” project. No billing account was selected or project created.
+- Remaining: create/configure Google project and readonly OAuth client, save client credentials, choose the appropriate production audience, authorize the hiring mailbox, verify actual email/resume import and a scheduled incremental sync. Do not claim mailbox integration complete based on the synthetic checks.
