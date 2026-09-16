@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Search,
@@ -9,6 +9,7 @@ import {
   MessageSquare,
   ArrowUpRight,
   GripVertical,
+  LoaderCircle,
 } from "lucide-react";
 import type { Workspace, Candidate, Activity } from "@/lib/types";
 import { Avatar, Empty, when } from "./primitives";
@@ -19,12 +20,14 @@ export type Mutate = (
 export function HiringBoard({
   data,
   mutate,
+  pendingMoves,
   onCandidate,
   onNew,
   onSignal,
 }: {
   data: Workspace;
   mutate: Mutate;
+  pendingMoves: Set<string>;
   onCandidate: (c: Candidate) => void;
   onNew: () => void;
   onSignal: (a: Activity) => void;
@@ -34,6 +37,46 @@ export function HiringBoard({
   const [role, setRole] = useState("");
   const [experience, setExperience] = useState("");
   const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const dragPoint = useRef<{
+    x: number;
+    y: number;
+    stage: HTMLElement | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!dragging) return;
+    let frame = 0;
+    const scroll = () => {
+      const point = dragPoint.current;
+      const board = boardRef.current;
+      if (point && board) {
+        const bounds = board.getBoundingClientRect();
+        const speed = (position: number, start: number, end: number) =>
+          position < start + 64
+            ? -Math.min(14, (start + 64 - position) / 4)
+            : position > end - 64
+              ? Math.min(14, (position - end + 64) / 4)
+              : 0;
+        if (point.y >= bounds.top && point.y <= bounds.bottom) {
+          board.scrollLeft += speed(point.x, bounds.left, bounds.right);
+          const stage = point.stage;
+          if (stage) {
+            const rect = stage.getBoundingClientRect();
+            stage.scrollTop += speed(point.y, rect.top, rect.bottom);
+          }
+        }
+      }
+      frame = requestAnimationFrame(scroll);
+    };
+    frame = requestAnimationFrame(scroll);
+    return () => cancelAnimationFrame(frame);
+  }, [dragging]);
+  const endDrag = () => {
+    setDragging(null);
+    setOver(null);
+    dragPoint.current = null;
+  };
   const tags = useMemo(
     () => [...new Set(data.candidates.flatMap((c) => c.tags))].sort(),
     [data.candidates],
@@ -120,7 +163,24 @@ export function HiringBoard({
         </select>
         <span className="toolbar-count">{candidates.length} candidates</span>
       </div>
-      <div className="board">
+      <div
+        className="board"
+        ref={boardRef}
+        onDragOver={(e) => {
+          if (!dragging) return;
+          dragPoint.current = {
+            x: e.clientX,
+            y: e.clientY,
+            stage: (e.target as HTMLElement).closest<HTMLElement>(".stage"),
+          };
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            dragPoint.current = null;
+            setOver(null);
+          }
+        }}
+      >
         <section className="stage signals">
           <div className="stage-heading">
             <Zap size={17} />
@@ -168,21 +228,35 @@ export function HiringBoard({
           </div>
         </section>
         {data.stages.map((s) => {
-          const list = candidates.filter((c) => c.stage_id === s.id);
+          const list = candidates
+            .filter((c) => c.stage_id === s.id)
+            .sort(
+              (a, b) =>
+                Number(pendingMoves.has(b.id)) -
+                  Number(pendingMoves.has(a.id)) ||
+                b.updated_at.localeCompare(a.updated_at),
+            );
           return (
             <section
-              className={`stage tone-${s.color} ${dragging ? "drop-ready" : ""}`}
+              className={`stage tone-${s.color} ${over === s.id ? "drop-active" : ""}`}
               key={s.id}
               aria-label={s.name}
               onDragOver={(e) => {
+                if (!dragging) return;
                 e.preventDefault();
+                setOver(s.id);
                 e.dataTransfer.dropEffect = "move";
               }}
               onDrop={(e) => {
                 e.preventDefault();
                 const id = e.dataTransfer.getData("text/plain");
-                setDragging(null);
-                if (data.candidates.some((c) => c.id === id))
+                endDrag();
+                e.currentTarget.scrollTop = 0;
+                if (
+                  data.candidates.some(
+                    (c) => c.id === id && c.stage_id !== s.id,
+                  )
+                )
                   void mutate("move", { id, stage_id: s.id }).catch(() => {});
               }}
             >
@@ -205,6 +279,11 @@ export function HiringBoard({
                           : " "}
               </p>
               <div className="stage-cards">
+                {over === s.id &&
+                  dragging &&
+                  !list.some((c) => c.id === dragging) && (
+                    <div className="drop-placeholder">Drop into {s.name}</div>
+                  )}
                 {list.map((c) => {
                   const last = data.activities.find(
                     (a) =>
@@ -213,14 +292,15 @@ export function HiringBoard({
                   );
                   return (
                     <button
-                      className="candidate-card"
+                      className={`candidate-card ${dragging === c.id ? "is-dragging" : ""} ${pendingMoves.has(c.id) ? "is-saving" : ""}`}
                       key={c.id}
                       draggable
                       onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
                         e.dataTransfer.setData("text/plain", c.id);
                         setDragging(c.id);
                       }}
-                      onDragEnd={() => setDragging(null)}
+                      onDragEnd={endDrag}
                       onClick={() => onCandidate(c)}
                     >
                       <div className="card-person">
@@ -239,22 +319,28 @@ export function HiringBoard({
                         {c.tags.length > 2 && <span>+{c.tags.length - 2}</span>}
                       </div>
                       <div className="card-footer">
-                        <span>
-                          {last ? (
-                            <>
-                              <MessageSquare size={12} />
-                              {when(last.occurred_at)}
-                            </>
-                          ) : (
-                            <>
-                              Added{" "}
-                              {new Date(c.created_at).toLocaleDateString(
-                                undefined,
-                                { month: "short", day: "numeric" },
-                              )}
-                            </>
-                          )}
-                        </span>
+                        {pendingMoves.has(c.id) ? (
+                          <span className="card-saving">
+                            <LoaderCircle size={12} className="spin" /> Saving…
+                          </span>
+                        ) : (
+                          <span>
+                            {last ? (
+                              <>
+                                <MessageSquare size={12} />
+                                {when(last.occurred_at)}
+                              </>
+                            ) : (
+                              <>
+                                Added{" "}
+                                {new Date(c.created_at).toLocaleDateString(
+                                  undefined,
+                                  { month: "short", day: "numeric" },
+                                )}
+                              </>
+                            )}
+                          </span>
+                        )}
                         <ArrowUpRight size={14} />
                       </div>
                     </button>

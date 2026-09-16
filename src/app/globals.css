@@ -794,8 +794,77 @@ select {
   border: 1px dashed #dce3ed;
   border-radius: 8px;
 }
-.drop-ready {
-  border-style: dashed;
+.stage.drop-active {
+  border-color: #2563eb;
+  box-shadow: inset 0 0 0 1px #2563eb;
+  background: #edf4ff;
+}
+.drop-placeholder {
+  border: 1px dashed #5188ed;
+  border-radius: 9px;
+  padding: 22px 12px;
+  color: #2455ac;
+  background: #e3edff;
+  font-size: 0.8rem;
+  text-align: center;
+}
+.candidate-card.is-dragging {
+  opacity: 0.35;
+}
+.candidate-card.is-saving {
+  border-color: #94b8fa;
+}
+.card-saving {
+  color: #2455ac;
+}
+.spin {
+  animation: save-spin 1s linear infinite;
+}
+@keyframes save-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.move-toast {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dce5f1;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 30px #16274224;
+  max-width: calc(100vw - 32px);
+  width: max-content;
+  font-size: 0.8rem;
+}
+.move-toast > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.move-toast svg {
+  flex-shrink: 0;
+}
+.move-toast > button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.move-toast > button:not(.icon-button) {
+  color: #2455ac;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
 }
 .empty {
   text-align: center;

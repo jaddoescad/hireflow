@@ -10,6 +10,8 @@ import {
   Plus,
   ArrowRight,
   RefreshCw,
+  LoaderCircle,
+  Undo2,
   Check,
   X,
 } from "lucide-react";
@@ -19,6 +21,7 @@ import type {
   Candidate,
   Activity,
 } from "@/lib/types";
+import { OptimisticMoves } from "@/lib/optimistic-moves";
 import { Auth } from "./auth";
 import { Logo, Avatar, Modal, Field, Empty } from "./primitives";
 import { HiringBoard } from "./hiring-board";
@@ -26,7 +29,26 @@ import { CandidateDetail, CandidateEditor } from "./candidate-detail";
 import { Team } from "./team";
 import { Settings } from "./settings";
 export function Workspace() {
-  const [data, setData] = useState<WorkspaceData | null>(null);
+  const [serverData, setData] = useState<WorkspaceData | null>(null);
+  const [moveTargets, setMoveTargets] = useState(new Map<string, string>());
+  const [moves] = useState(() => new OptimisticMoves(setMoveTargets));
+  const moveVersion = useRef(0);
+  const [moveNotice, setMoveNotice] = useState<{
+    companyId: string;
+    id: string;
+    previous: string;
+    name: string;
+    stage: string;
+    stageId: string;
+    status: "saving" | "saved" | "failed";
+  } | null>(null);
+  const data = serverData && {
+    ...serverData,
+    candidates: serverData.candidates.map((candidate) => {
+      const stage = moveTargets.get(`${candidate.company_id}:${candidate.id}`);
+      return stage ? { ...candidate, stage_id: stage } : candidate;
+    }),
+  };
   const [signedIn, setSignedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -116,23 +138,86 @@ export function Workspace() {
     };
   }, [signedIn, data?.company?.id, load]);
   async function mutate(action: string, payload: Record<string, unknown>) {
-    try {
+    const companyId = companyRef.current;
+    const post = async () => {
       const response = await fetch("/api/mutate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          company_id: companyRef.current,
-          payload,
-        }),
+        body: JSON.stringify({ action, company_id: companyId, payload }),
       });
       const result = await response.json();
       if (!response.ok)
         throw new Error(result.error || "Could not save change");
-      await load();
+      return result;
+    };
+    if (action === "move" && companyId) {
+      const candidate = data?.candidates.find((c) => c.id === payload.id);
+      const stage = data?.stages.find((s) => s.id === payload.stage_id);
+      if (!candidate || !stage)
+        throw new Error("Candidate or stage is no longer available.");
+      if (candidate.stage_id === stage.id) return { id: candidate.id };
+      const version = ++moveVersion.current;
+      setError("");
+      setMoveNotice({
+        companyId,
+        id: candidate.id,
+        previous: candidate.stage_id,
+        name: candidate.name,
+        stage: stage.name,
+        stageId: stage.id,
+        status: "saving",
+      });
+      try {
+        const result = await moves.move(
+          `${companyId}:${candidate.id}`,
+          stage.id,
+          post,
+          () => {
+            // Discard refreshes that began before this save was acknowledged.
+            if (companyRef.current === companyId) ++requestRef.current;
+            setData((current) =>
+              current?.company?.id === companyId
+                ? {
+                    ...current,
+                    candidates: current.candidates.map((c) =>
+                      c.id === candidate.id
+                        ? {
+                            ...c,
+                            stage_id: stage.id,
+                            updated_at: new Date().toISOString(),
+                          }
+                        : c,
+                    ),
+                  }
+                : current,
+            );
+          },
+        );
+        if (moveVersion.current === version && companyRef.current === companyId)
+          setMoveNotice((notice) => notice && { ...notice, status: "saved" });
+        if (companyRef.current === companyId) void load(companyId);
+        return result;
+      } catch (e) {
+        if (companyRef.current === companyId) {
+          if (moveVersion.current === version)
+            setMoveNotice(
+              (notice) => notice && { ...notice, status: "failed" },
+            );
+          setError(
+            `Could not move ${candidate.name}. ${e instanceof Error ? e.message : "Please try again."}`,
+          );
+          void load(companyId);
+        }
+        throw e;
+      }
+    }
+    try {
+      const result = await post();
+      if (companyRef.current === companyId) await load(companyId);
       return result;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save change");
+      if (companyRef.current === companyId)
+        setError(e instanceof Error ? e.message : "Could not save change");
       throw e;
     }
   }
@@ -142,6 +227,7 @@ export function Workspace() {
     setSelected(null);
     setSignal(null);
     setSwitcher(false);
+    setMoveNotice(null);
     setEdit(undefined);
     setView("hiring");
     setData(null);
@@ -374,6 +460,13 @@ export function Workspace() {
         {view === "hiring" ? (
           <HiringBoard
             data={data}
+            pendingMoves={
+              new Set(
+                data.candidates
+                  .filter((c) => moveTargets.has(`${c.company_id}:${c.id}`))
+                  .map((c) => c.id),
+              )
+            }
             mutate={mutate}
             onCandidate={(c) => setSelected(c.id)}
             onNew={() => setEdit(null)}
@@ -398,6 +491,55 @@ export function Workspace() {
           <RefreshCw size={15} />
         </button>
       </main>
+      {moveNotice && moveNotice.companyId === data.company?.id && (
+        <div className="move-toast">
+          <span role="status" aria-live="polite">
+            {moveNotice.status === "saving" ? (
+              <LoaderCircle size={16} className="spin" />
+            ) : moveNotice.status === "saved" ? (
+              <Check size={16} />
+            ) : (
+              <X size={16} />
+            )}
+            {moveNotice.status === "failed"
+              ? "Move failed. Previous stage restored."
+              : `${moveNotice.name} → ${moveNotice.stage}${moveNotice.status === "saving" ? " · Saving…" : " · Saved"}`}
+          </span>
+          {moveNotice.status === "failed" && (
+            <button
+              onClick={() => {
+                void mutate("move", {
+                  id: moveNotice.id,
+                  stage_id: moveNotice.stageId,
+                }).catch(() => {});
+              }}
+            >
+              Retry
+            </button>
+          )}
+          {moveNotice.status !== "failed" && (
+            <button
+              onClick={() => {
+                const notice = moveNotice;
+                setMoveNotice(null);
+                void mutate("move", {
+                  id: notice.id,
+                  stage_id: notice.previous,
+                }).catch(() => {});
+              }}
+            >
+              <Undo2 size={14} /> Undo
+            </button>
+          )}
+          <button
+            className="icon-button"
+            aria-label="Dismiss move notification"
+            onClick={() => setMoveNotice(null)}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
       {c && edit === undefined && (
         <CandidateDetail
           candidate={c}
