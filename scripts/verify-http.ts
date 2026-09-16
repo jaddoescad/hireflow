@@ -159,17 +159,15 @@ try {
   assert(!JSON.stringify(after.data).includes(token));
   const historyUrl = `/api/activities?company=${cid}&candidate=${candidate.data.id}`;
   assert.equal((await request(historyUrl, undefined, b)).status, 403);
-  const insertHistory = await admin
-    .from("hf_activities")
-    .insert(
-      Array.from({ length: 51 }, (_, i) => ({
-        company_id: cid,
-        candidate_id: candidate.data.id,
-        kind: "note",
-        body: `History item ${i}`,
-        occurred_at: new Date(Date.now() - i * 1000).toISOString(),
-      })),
-    );
+  const insertHistory = await admin.from("hf_activities").insert(
+    Array.from({ length: 51 }, (_, i) => ({
+      company_id: cid,
+      candidate_id: candidate.data.id,
+      kind: "note",
+      body: `History item ${i}`,
+      occurred_at: new Date(Date.now() - i * 1000).toISOString(),
+    })),
+  );
   assert.equal(insertHistory.error, null);
   const firstHistory = await request(historyUrl, undefined, a);
   assert.equal(firstHistory.data.activities.length, 50);
@@ -184,6 +182,26 @@ try {
       ),
     ).size,
     52,
+  );
+  // Chat filtering happens before pagination: notes and stage changes never hide SMS.
+  await mutate(a, cid, "move", {
+    id: candidate.data.id,
+    stage_id: state.data.stages[1].id,
+  });
+  const chat = await request(historyUrl + "&chat=1", undefined, a);
+  assert.equal(chat.status, 200);
+  assert.equal(chat.data.activities.length, 1);
+  assert.equal(chat.data.activities[0].kind, "sms");
+  assert.equal(chat.data.has_more, false);
+  const notes = await request(historyUrl + "&notes=1", undefined, a);
+  assert(
+    notes.data.activities.every(
+      (item: { kind: string }) => item.kind === "note",
+    ),
+  );
+  assert.equal(
+    (await request(historyUrl + "&chat=1", undefined, b)).status,
+    403,
   );
   const invited = await mutate(a, cid, "invite", {
     email: b.email,

@@ -1,17 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
-import {
-  Phone,
-  Mail,
-  MessageSquare,
-  StickyNote,
-  ArrowRight,
-  ExternalLink,
-  RefreshCw,
-} from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Phone, StickyNote, ExternalLink, RefreshCw } from "lucide-react";
 import type { Activity, Candidate, Workspace } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
-import { Avatar, Field, Modal, when, Empty } from "./primitives";
+import { Field, Modal, when, Empty } from "./primitives";
 export function CandidateEditor({
   candidate,
   data,
@@ -153,7 +145,7 @@ export function CandidateDetail({
   onClose: () => void;
   onEdit: () => void;
 }) {
-  const [tab, setTab] = useState("activity");
+  const [tab, setTab] = useState("chat");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -162,16 +154,38 @@ export function CandidateDetail({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyPage, setHistoryPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const historyUrl = `/api/activities?company=${c.company_id}&candidate=${c.id}&notes=${tab === "notes" ? "1" : "0"}`;
+  const conversation = useRef<HTMLDivElement>(null);
+  const historyRequest = useRef<AbortController | null>(null);
+  const olderHeight = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = conversation.current;
+    if (!el || tab !== "chat") return;
+    el.scrollTop =
+      olderHeight.current === null
+        ? el.scrollHeight
+        : el.scrollHeight - olderHeight.current;
+    olderHeight.current = null;
+  }, [activities, tab]);
+  const historyUrl = `/api/activities?company=${c.company_id}&candidate=${c.id}&notes=${tab === "notes" ? "1" : "0"}&chat=${tab === "chat" ? "1" : "0"}`;
   const historyVersion = data.activities
-    .filter((a) => a.candidate_id === c.id)
+    .filter(
+      (a) =>
+        a.candidate_id === c.id &&
+        (tab === "chat"
+          ? a.kind === "sms" || a.kind === "call"
+          : a.kind === "note"),
+    )
     .map((a) => a.id)
     .join(",");
   useEffect(() => {
+    if (tab === "details") return;
     const controller = new AbortController();
+    historyRequest.current = controller;
+    setError("");
     setHistoryLoading(true);
     setActivities([]);
     setHistoryPage(0);
+    setHasMore(false);
     fetch(historyUrl, { signal: controller.signal })
       .then(async (r) => {
         const result = await r.json();
@@ -186,59 +200,46 @@ export function CandidateDetail({
         if (!controller.signal.aborted) setHistoryLoading(false);
       });
     return () => controller.abort();
-  }, [historyUrl, historyVersion]);
+  }, [historyUrl, historyVersion, tab]);
   async function moreHistory() {
+    const controller = historyRequest.current;
+    if (!controller || controller.signal.aborted) return;
     setHistoryLoading(true);
     try {
-      const r = await fetch(`${historyUrl}&page=${historyPage + 1}`);
+      const r = await fetch(`${historyUrl}&page=${historyPage + 1}`, {
+        signal: controller.signal,
+      });
       const result = await r.json();
       if (!r.ok) throw new Error(result.error);
+      if (controller.signal.aborted) return;
+      olderHeight.current = conversation.current?.scrollHeight ?? null;
       setActivities((current) => [...current, ...result.activities]);
       setHistoryPage((p) => p + 1);
       setHasMore(result.has_more);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load history");
+      if (!controller.signal.aborted)
+        setError(e instanceof Error ? e.message : "Could not load history");
     } finally {
-      setHistoryLoading(false);
+      if (!controller.signal.aborted) setHistoryLoading(false);
     }
   }
   return (
-    <Modal title="Candidate" onClose={onClose} wide>
-      <div className="detail-top">
-        <Avatar name={c.name} />
-        <div>
-          <h2>{c.name}</h2>
-          <p>{c.job_title || "Role not specified"}</p>
-        </div>
+    <Modal title={c.name} onClose={onClose} wide className="candidate-dialog">
+      <div className="candidate-summary">
+        <span>{c.job_title || "Role not specified"}</span>
         <button onClick={onEdit}>Edit</button>
       </div>
-      <div className="contact-lines">
+      <div className="candidate-controls">
         {c.phone ? (
           <a href={`tel:${c.phone}`}>
-            <Phone size={16} />
+            <Phone size={14} />
             {c.phone}
-            <ExternalLink size={13} />
           </a>
         ) : (
-          <span>No phone number</span>
+          <span className="muted">No phone number</span>
         )}
-        {c.email ? (
-          <span>
-            <Mail size={16} />
-            {c.email}
-          </span>
-        ) : (
-          <span>No email address</span>
-        )}
-      </div>
-      <div className="tags">
-        {c.experience && <span>{c.experience}</span>}
-        {c.tags.map((t) => (
-          <span key={t}>{t}</span>
-        ))}
-      </div>
-      <Field label="Hiring stage">
         <select
+          aria-label="Hiring stage"
           value={c.stage_id}
           onChange={(e) =>
             void mutate("move", { id: c.id, stage_id: e.target.value }).catch(
@@ -252,9 +253,9 @@ export function CandidateDetail({
             </option>
           ))}
         </select>
-      </Field>
+      </div>
       <div className="tabs" role="tablist">
-        {["activity", "notes", "details"].map((t) => (
+        {["chat", "notes", "details"].map((t) => (
           <button
             key={t}
             role="tab"
@@ -267,6 +268,12 @@ export function CandidateDetail({
       </div>
       {tab === "details" ? (
         <dl className="details-list">
+          <dt>Email</dt>
+          <dd>{c.email || "Not provided"}</dd>
+          <dt>Experience</dt>
+          <dd>{c.experience || "Not provided"}</dd>
+          <dt>Tags</dt>
+          <dd>{c.tags.join(", ") || "None"}</dd>
           <dt>Source</dt>
           <dd>{c.source}</dd>
           <dt>Added</dt>
@@ -280,99 +287,112 @@ export function CandidateDetail({
         </dl>
       ) : (
         <>
-          <div className="timeline">
-            {historyLoading && activities.length === 0 && (
-              <p className="muted">Loading history…</p>
+          <div
+            className={tab === "chat" ? "conversation" : "timeline"}
+            ref={conversation}
+            role="region"
+            aria-label={tab === "chat" ? "Conversation" : "Team notes"}
+          >
+            {hasMore && (
+              <button
+                className="load-older"
+                disabled={historyLoading}
+                onClick={() => void moreHistory()}
+              >
+                {historyLoading ? "Loading…" : "Load older"}
+              </button>
             )}
-            {activities.length ? (
-              activities.map((a) => (
-                <article key={a.id} className={`activity ${a.kind}`}>
-                  <span className="activity-icon">
-                    {a.kind === "sms" ? (
-                      <MessageSquare size={16} />
-                    ) : a.kind === "call" ? (
-                      <Phone size={16} />
-                    ) : a.kind === "note" ? (
+            {historyLoading && activities.length === 0 && (
+              <p className="muted">Loading…</p>
+            )}
+            {(tab === "chat" ? [...activities].reverse() : activities).map(
+              (a) =>
+                tab === "chat" ? (
+                  a.kind === "call" ? (
+                    <article key={a.id} className="chat-call">
+                      <Phone size={14} />
+                      <div>
+                        <p>{a.body}</p>
+                        <time>{when(a.occurred_at)}</time>
+                      </div>
+                    </article>
+                  ) : (
+                    <article
+                      key={a.id}
+                      className={`chat-message ${a.direction === "outgoing" ? "outgoing" : "incoming"}`}
+                    >
+                      <p>{a.body}</p>
+                      <time>
+                        <span className="sr-only">
+                          {a.direction === "outgoing"
+                            ? "Your team: "
+                            : "Candidate: "}
+                        </span>
+                        {when(a.occurred_at)}
+                      </time>
+                    </article>
+                  )
+                ) : (
+                  <article key={a.id} className="activity note">
+                    <span className="activity-icon">
                       <StickyNote size={16} />
-                    ) : (
-                      <ArrowRight size={16} />
-                    )}
-                  </span>
-                  <div>
-                    <header>
-                      <strong>
-                        {a.kind === "sms"
-                          ? "Text message"
-                          : a.kind === "call"
-                            ? "Phone call"
-                            : a.kind === "note"
-                              ? "Team note"
-                              : "Stage changed"}
-                      </strong>
-                      <time>{when(a.occurred_at)}</time>
-                    </header>
-                    <p>{a.body}</p>
-                    {a.direction && (
-                      <small>
-                        {a.direction === "incoming"
-                          ? "From candidate"
-                          : "From your team"}{" "}
-                        · Quo
-                      </small>
-                    )}
-                  </div>
-                </article>
-              ))
-            ) : historyLoading ? null : (
+                    </span>
+                    <div>
+                      <header>
+                        <strong>Team note</strong>
+                        <time>{when(a.occurred_at)}</time>
+                      </header>
+                      <p>{a.body}</p>
+                    </div>
+                  </article>
+                ),
+            )}
+            {!historyLoading && !activities.length && (
               <Empty
-                title={
-                  tab === "notes" ? "No notes yet" : "Start the conversation"
+                title={tab === "notes" ? "No notes yet" : "No conversation yet"}
+                detail={
+                  tab === "notes"
+                    ? "Keep interview notes here."
+                    : "Quo messages and calls will appear here."
                 }
-                detail="Notes and Quo communication will appear here."
               />
             )}
           </div>
-          {hasMore && (
-            <button
-              disabled={historyLoading}
-              onClick={() => void moreHistory()}
+          {tab === "notes" && (
+            <form
+              className="note-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setBusy(true);
+                try {
+                  await mutate("note", { candidate_id: c.id, body: note });
+                  setNote("");
+                } catch (e) {
+                  setError(
+                    e instanceof Error ? e.message : "Could not save note",
+                  );
+                } finally {
+                  setBusy(false);
+                }
+              }}
             >
-              {historyLoading ? "Loading…" : "Load older activity"}
-            </button>
+              <Field label="Add a team note">
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="What should the team know?"
+                  required
+                  maxLength={10000}
+                />
+              </Field>
+              <button className="primary" disabled={busy || !note.trim()}>
+                {busy ? "Saving…" : "Save note"}
+              </button>
+            </form>
           )}
-          <form
-            className="note-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setBusy(true);
-              try {
-                await mutate("note", { candidate_id: c.id, body: note });
-                setNote("");
-              } catch (e) {
-                setError(
-                  e instanceof Error ? e.message : "Could not save note",
-                );
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Field label="Add a team note">
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="What should the team know?"
-                required
-                maxLength={10000}
-              />
-            </Field>
-            <button className="primary" disabled={busy || !note.trim()}>
-              {busy ? "Saving…" : "Save note"}
-            </button>
-          </form>
         </>
       )}
-      {c.phone && (
+      {tab === "chat" && c.phone && (
         <div className="detail-footer">
           <a href={`https://my.quo.com/`} target="_blank" rel="noreferrer">
             Open Quo <ExternalLink size={14} />
