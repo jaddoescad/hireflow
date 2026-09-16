@@ -35,6 +35,11 @@ test("phone and email normalization preserves international identity", () => {
   assert.equal(p.email, "alex@example.com");
   assert.equal(p.phone, "+16135550123");
   assert.throws(() => intakeSchema.parse({ name: "Alex", source_id: "123" }));
+  const review = intakeSchema.parse({ name: "Alex", source_id: "124", email: "alex@example.com", phone: "not supplied", attributes: { "Applicant Type": "Exterior" } });
+  assert.equal(review.phone, "");
+  assert.equal(review.attributes["Original phone (needs review)"], "not supplied");
+  assert.deepEqual(review.tags, ["Phone needs review", "Exterior"]);
+  assert.throws(() => intakeSchema.parse({ name: "Alex", source_id: "125", phone: "invalid" }));
 });
 test("Quo signatures reject tampering, stale events and invalid lengths", () => {
   const payload = { id: "event", body: "hello world" };
@@ -138,4 +143,11 @@ test("Hiring Sheet import keeps answers and stable identity across row sorting",
   assert.equal(a.attributes.Decision, "Contact later");
   assert.equal(a.attributes.Notes, "Interview notes");
   assert.equal(a.phone, "+16135550123");
+  const invalid = [...row];
+  invalid[3] = "not supplied";
+  const reviewed = mapHiringRow(headers, invalid, "sheet", 3)!;
+  assert.equal(reviewed.phone, "");
+  assert.equal(reviewed.email, "alex@example.com");
+  assert.equal(reviewed.attributes["Original phone (needs review)"], "not supplied");
+  assert.ok(reviewed.tags.includes("Phone needs review"));
 });

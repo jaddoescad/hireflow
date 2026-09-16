@@ -1,27 +1,38 @@
-# Implementation status
+# Launch verification
 
-## Implemented and verified
+Verified September 15–16, 2026.
 
-Production: https://hireflow-six-mu.vercel.app (Vercel project `hireflow` in Jad Slim's projects).
-Production Supabase environment variables and canonical app URL are configured. The shared Supabase project's redirect allowlist now includes HireFlow's local and production callbacks, including invitation context; all other settings were preserved.
+- **Production:** https://hireflow-theta-seven.vercel.app
+- **Deployment:** `dpl_B19Y7epioRE2wRgHa72L8Cp1bDpT`, ready and aliased to production.
+- **Database and authentication:** dedicated HireFlow Supabase project `slpzezujtpjrxlugalqs`, Canada Central; all four migrations applied.
+- **Admin:** `info@paintersottawa.com`; both email-link and one-time-code login verified through the real Gmail inbox. The restored account has no migrated password and can use email sign-in.
+- **Sender:** `hireflow@homeproapps.com`, MXroute port 587, configured separately for Supabase Auth and application invitations. MX, SPF and DKIM verified. Fixed the MXroute local-delivery setting for paintersottawa.com to match its Google-hosted mailbox. Auth email limit: 30/hour. Leaked-password protection enabled; the security advisor reports no warnings. The two no-policy notices are expected for server-only integration and invitation tables.
 
-- Supabase email authentication, company onboarding/chooser/switcher, admin/member roles, invitation links and acceptance, enable/disable membership.
-- Seven default stages, custom stages, reorder, candidate moves, contact profiles, tags, job/experience filters, notes.
-- Candidate-scoped paginated communication history and signals linked by normalized phone/email.
-- Authenticated Zapier intake, stable retry identities, signed Quo v1 webhooks, per-candidate Quo history sync code.
-- Hiring Sheet mapping and dry-run historical import script.
-- MIT license, setup instructions, environment example, generated UI reference, and requested AGENTS.md rules.
+## Product verification
 
-Verified: production build, TypeScript, unit tests, database integration tests, HTTP integration tests, and browser flows for login, company creation, applicant creation, stage movement, notes, custom stages, team protections, and mobile layout. No production dependency advisories were reported by npm audit.
+| Requirement | Evidence |
+| --- | --- |
+| Multiple companies and team access | Database tests cover shared accounts, membership isolation, immediate disable and concurrent last-admin protection. A fresh browser accepted a second-company invitation and switched between member and admin workspaces. |
+| Invitations | Production HTTP tests verify identity, acceptance and revocation; database tests verify retries, expiry and new/existing accounts. SMTP delivery to the controlled HomeProApps mailbox succeeded. Browser acceptance persisted as the expected member role. |
+| Hiring workflow | Browser-created candidate, stage movement and notes were independently checked in the database. Search, role/experience/tag filters, configurable stages and drag/drop are implemented; stage selection also supports touch and keyboard use. |
+| Responsive UI | Inspected the production board, company switcher, candidate form and candidate detail at 390 × 844. Added a candidate, moved it to Initial interview and saved a note. No browser errors appeared. |
+| Isolation and secrets | Database tests cover RLS, forbidden client writes, server-only secrets and cross-company references. HTTP tests cover sessions, origins, company authorization and secret redaction. |
+| Intake and retries | Production HTTP checks pass. The actual Zapier POST test created the expected record and a repeat returned the same ID with `duplicate=true`. |
+| Communications | Quo's signed dashboard test reached the endpoint with HTTP 200; its different-line payload was correctly ignored. Signed HTTP tests verify candidate matching, retries, wrong-line exclusion and ambiguous contacts. Real history fetched from Quo is matched to imported applicants and rendered in Activity. These checks use provider tests and historical messages; no claim is made that a new candidate call was placed during verification. |
+| Build and repository | Unit tests, TypeScript and production build pass. GitHub Actions is configured for these checks without secrets. Current private credentials and all 549 imported applicant email addresses were scanned against tracked files and Git history with no matches. Private backups and test artifacts are ignored and excluded from deployment. |
 
-The HTTP integration suite also passed against the deployed production URL, covering sessions, origins, company authorization, candidate creation, intake retries, signed Quo payloads, secret redaction, invitations, and membership revocation. Synthetic test data was removed. Concurrent stage creation and rename ordering passed database checks. Authentication callbacks preserve invitations across tabs and show an error for unusable links.
+All synthetic verification companies, users and candidates were removed. Final production check: 549 applicants, seven stages, three SMS activities and the enabled admin membership.
 
-## Still required for a complete live launch
+## Connected workflows
 
-- Confirm the first Ottawa Painters admin email, then create that actual company and import its hiring records.
-- Confirm signup/passwordless email delivery with the configured mail provider.
-- Configure SMTP invitation delivery and verify a real invitation with the intended recipient.
-- Connect the selected Quo production API key and message/call webhook signing secrets; verify live events and history synchronization.
-- Add the HireFlow POST step to the active hiring Zap, preserve the existing Sheets action, and verify a real application through the complete flow.
+The active Hiring Zap is `368944213`, v7, **Interior + Exterior Hiring | Facebook Leads → Hiring Sheet**. The HireFlow POST step `380248193` follows Sheets and precedes Delay. Existing Sheets, email, delay and Quo steps remain intact. Mapping includes lead ID, contact information, role, experience, category, leadership, transportation, availability, pay and application time.
 
-The Quo/Zapier code has passed synthetic tests. Live provider delivery has not been configured or verified yet. This is not a completion claim.
+All 549 current Hiring Sheet applicants were imported. Thirteen invalid phone values are retained in attributes and tagged **Phone needs review**; no phone numbers were guessed. Other sheet answers are preserved. Cards label their creation timestamp **Added** to distinguish it from a historical application date.
+
+Quo uses the dedicated **hireflow-production** key and Production line `PNHtOrvjNR` (+13433265133). Webhook `WH31992cc0f3b94ba3a94d9658c202ae26` subscribes to `call.completed`, `message.received` and `message.delivered` for that line. Each company can configure its own integration in Settings.
+
+## Infrastructure cleanup
+
+The HireFlow Cloudflare Worker and D1 database were deleted; its email sending was disabled and its generated DNS records removed. A final DNS search for HireFlow returned no records. Workers Paid renewal is canceled, ending October 11, 2026. Unrelated applications, domain records and subscriptions were preserved.
+
+The repository includes an MIT license, setup/contribution instructions, environment example, migrations, integration guide, reusable sign-in email template and generated design reference. It is prepared for the owner's GitHub publication; no public repository has been created by this task.

@@ -14,7 +14,7 @@ A multi-company hiring CRM built with Next.js, TypeScript, and Supabase. Manage 
 
 ## Run locally
 
-Requires Node.js 22+ and a Supabase project.
+Requires Node.js 22+ and a dedicated Supabase project.
 
 ```sh
 npm ci
@@ -25,9 +25,9 @@ npm run dev
 
 Open http://localhost:3100. Never prefix the service-role key or SMTP credentials with `NEXT_PUBLIC_`.
 
-Apply every SQL file in `supabase/migrations` in filename order using the Supabase CLI or dashboard. The migrations create `hf_` tables alongside existing applications. They enable row-level security and grant client read access only to enabled company members. Server mutations are serialized by company and verify current membership. Only the server role can invoke mutation/ingestion RPCs or read integration secrets and invitation tokens.
+Apply every SQL file in `supabase/migrations` in filename order using the Supabase CLI or dashboard. The migrations create the `hf_` application tables. They enable row-level security and grant client read access only to enabled company members. Server mutations are serialized by company and verify current membership. Only the server role can invoke mutation/ingestion RPCs or read integration secrets and invitation tokens.
 
-Configure Auth email delivery in Supabase. Add `http://localhost:3100/auth/callback` and `http://localhost:3100/auth/callback?invite=*` to its redirect allowlist. Create your account, confirm your email, create a company, then invite teammates. Configure SMTP environment variables for invitation email delivery. A copyable invitation link is available if delivery is unavailable.
+Configure Auth email delivery in Supabase. In Authentication → Emails → Magic link or OTP, use `supabase/templates/magic-link.html` so users receive both the sign-in link and the code supported by the app. Enable leaked-password protection in the Email provider settings. Add `http://localhost:3100/auth/callback` and `http://localhost:3100/auth/callback?invite=*` to its redirect allowlist. Create your account, confirm your email, create a company, then invite teammates. Configure SMTP environment variables for invitation email delivery. A copyable invitation link is available if delivery is unavailable.
 
 The historical sheet importer runs in dry-run mode by default:
 

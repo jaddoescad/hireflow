@@ -151,6 +151,30 @@ try {
     mutate(b.id, null, "accept_invitation", { token_hash: hash(token) }),
   );
   assert.equal((await ok(b.db.from("hf_candidates").select("*"))).length, 1);
+  // An invitation must also work when the account is created after it was sent.
+  const lateEmail = `hf-test-${run}-late@example.com`;
+  const lateToken = randomBytes(32).toString("hex");
+  await ok(mutate(a.id, ca.id, "invite", {
+    email: lateEmail, role: "member", token_hash: hash(lateToken),
+  }));
+  const late = await make("late");
+  await ok(mutate(late.id, null, "accept_invitation", { token_hash: hash(lateToken) }));
+  assert.equal((await ok(late.db.from("hf_companies").select("id"))).length, 1);
+
+  const expiredToken = randomBytes(32).toString("hex");
+  const expired = await ok(mutate(a.id, ca.id, "invite", {
+    email: other.email, role: "member", token_hash: hash(expiredToken),
+  }));
+  await ok(admin.from("hf_invitations").update({ expires_at: "2020-01-01T00:00:00Z" }).eq("id", expired.id));
+  assert((await mutate(other.id, null, "accept_invitation", { token_hash: hash(expiredToken) })).error);
+
+  const revokedToken = randomBytes(32).toString("hex");
+  const revoked = await ok(mutate(a.id, ca.id, "invite", {
+    email: other.email, role: "member", token_hash: hash(revokedToken),
+  }));
+  await ok(mutate(a.id, ca.id, "revoke_invitation", { id: revoked.id }));
+  assert((await mutate(other.id, null, "accept_invitation", { token_hash: hash(revokedToken) })).error);
+
   assert(
     (
       await mutate(b.id, ca.id, "invite", {

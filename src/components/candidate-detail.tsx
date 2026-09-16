@@ -269,7 +269,7 @@ export function CandidateDetail({
         <dl className="details-list">
           <dt>Source</dt>
           <dd>{c.source}</dd>
-          <dt>Applied</dt>
+          <dt>Added</dt>
           <dd>{when(c.created_at)}</dd>
           {Object.entries(c.attributes).map(([k, v]) => (
             <div key={k}>

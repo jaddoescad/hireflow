@@ -1,6 +1,6 @@
 # HireFlow product scope
 
-An open-source hiring CRM, deployed as a separate Vercel application against the existing Ottawa Painters Supabase project.
+An open-source hiring CRM, deployed as a separate Vercel application against a dedicated HireFlow Supabase project.
 
 ## Identity and teams
 Email authentication; one account belongs to multiple companies. Company chooser after login and sidebar switcher. Company admins invite users by email, choose admin/member roles, and enable or disable membership without affecting other companies. Invitations expire, are revocable, and are accepted only by the matching verified email. Support both new and existing accounts.

@@ -247,7 +247,7 @@ export function HiringBoard({
                             </>
                           ) : (
                             <>
-                              Applied{" "}
+                              Added{" "}
                               {new Date(c.created_at).toLocaleDateString(
                                 undefined,
                                 { month: "short", day: "numeric" },

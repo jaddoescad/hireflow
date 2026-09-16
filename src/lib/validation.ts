@@ -62,7 +62,7 @@ export const intakeSchema = z
     source: z.string().trim().min(1).max(60).default("Meta"),
     name: candidate.name,
     email: candidate.email,
-    phone: candidate.phone,
+    phone: z.string().max(40).default(""),
     job_title: candidate.job_title,
     experience: candidate.experience,
     tags: candidate.tags,
@@ -72,6 +72,23 @@ export const intakeSchema = z
         z.union([z.string().max(2000), z.number(), z.boolean(), z.null()]),
       )
       .default({}),
+  })
+  .transform((value) => {
+    const attributes = { ...value.attributes };
+    const tags = new Set(value.tags);
+    let phone = "";
+    try {
+      phone = normalizePhone(value.phone);
+    } catch {
+      attributes["Original phone (needs review)"] = value.phone;
+      tags.add("Phone needs review");
+    }
+    const type = attributes["Applicant Type"];
+    if (typeof type === "string" && type.trim() && type.length <= 60)
+      tags.add(type.trim());
+    if (attributes["Led Crew Before"] === "Yes") tags.add("Crew lead experience");
+    if (attributes["Transportation Answer"] === "Yes") tags.add("Own transportation");
+    return { ...value, phone, attributes, tags: candidate.tags.parse([...tags]) };
   })
   .refine((v) => v.email || v.phone, {
     message: "An email or phone number is required.",

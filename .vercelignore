@@ -1,0 +1,6 @@
+tmp
+.env*
+.wrangler
+dist
+.git
+docs/design
