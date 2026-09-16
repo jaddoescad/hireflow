@@ -3,7 +3,7 @@
 Verified September 15–16, 2026.
 
 - **Production:** https://hireflow-theta-seven.vercel.app
-- **Deployment:** `dpl_DvsPCrYj9Kx5srSncjkSFRhmfWGQ`, ready and aliased to production.
+- **Deployment:** `dpl_2t6KebRPTeartFQ4tzhWEVYQnFQL`, ready and aliased to production.
 - **Database and authentication:** dedicated HireFlow Supabase project `slpzezujtpjrxlugalqs`, Canada Central; foundation and Gmail migrations applied.
 - **Admin:** `info@paintersottawa.com`; both email-link and one-time-code login verified through the real Gmail inbox. The restored account has no migrated password and can use email sign-in.
 - **Sender:** `hireflow@homeproapps.com`, MXroute port 587, configured separately for Supabase Auth and application invitations. MX, SPF and DKIM verified. Fixed the MXroute local-delivery setting for paintersottawa.com to match its Google-hosted mailbox. Auth email limit: 30/hour. Leaked-password protection enabled; the security advisor reports no warnings. The two no-policy notices are expected for server-only integration and invitation tables.
@@ -44,13 +44,16 @@ Kanban moves now update cards and counts immediately, serialize rapid writes per
 The combined deployment also includes the compact Chat-first candidate view from the parallel task. That task verified desktop/mobile presentation, server-side chat filtering before pagination and company authorization against production.
 
 
-## Gmail integration — deployed, mailbox authorization pending
+## Gmail integration — connected, final resume verification pending
 
-Deployment `dpl_DvsPCrYj9Kx5srSncjkSFRhmfWGQ` is **READY**, production, Next.js 16.3.5, commit `6a3f05a`; Vercel build completed in 14 seconds. Unique URL: https://hireflow-mjj3qhthx-jad-slims-projects.vercel.app. The canonical production alias points to it.
+Deployment `dpl_2t6KebRPTeartFQ4tzhWEVYQnFQL` is **READY** and serves the production alias. Unique URL: https://hireflow-8amznkvx3-jad-slims-projects.vercel.app. It includes the Gmail implementation and production Google OAuth credentials.
 
 - Email chat bubbles, incoming/sent matching, private resume downloads, unmatched-email linking and admin Gmail controls are implemented.
 - Fourteen unit tests, TypeScript and production build pass. Production HTTP/database checks pass for tenant isolation, disabled members, admin-only setup, private attachment downloads, matching, linking, deduplication, lease exclusion and disconnect invalidation. All synthetic fixtures were removed. The synthetic email conversation was visually inspected in the browser.
 - The database security advisor has no warnings/errors; its three informational notices are intentional server-only tables without client RLS policies.
 - Vercel Pro was verified. The five-minute production cron is registered; unauthenticated invocation returns 401 and authenticated invocation returns 200. Encryption and scheduler secrets are stored only in ignored local configuration and sensitive Vercel production variables.
-- **Not yet live for hiring@paintersottawa.com:** no Google OAuth client or mailbox grant exists. Google Cloud project creation requires selecting an existing billing account; a choice between “My Billing Account 1” and “My Maps Billing Account” was requested. The form is prepared for a dedicated “HireFlow Gmail” project. No billing account was selected or project created.
-- Remaining: create/configure Google project and readonly OAuth client, save client credentials, choose the appropriate production audience, authorize the hiring mailbox, verify actual email/resume import and a scheduled incremental sync. Do not claim mailbox integration complete based on the synthetic checks.
+- **Connected:** `hiring@paintersottawa.com` authorized the read-only Gmail connection. The first real import completed at 13:41:19 UTC on September 16 and imported one account-notice email. It correctly remains unmatched and has no attachment.
+- **Scheduled sync verified:** Vercel invoked `/api/cron/gmail` at 13:45:22 UTC with HTTP 200; the database records successful completion at 13:45:25 UTC, no error, a saved history cursor and a released lease. No manual sync was invoked for this check.
+- Dedicated Google Cloud project **HireFlow Gmail** (`integral-kit-508813-i7`) was created under the paintersottawa.com organization without selecting a billing account. Gmail API is enabled, and the Web OAuth client's callback is the production `/api/gmail/callback` URL. Client credentials remain in ignored local configuration and sensitive production variables.
+- The Google app uses **Internal** audience for the paintersottawa.com Workspace organization. This deployment's Gmail authorization does not yet support unrelated companies' Google accounts; public distribution requires an appropriate External audience and Google's applicable verification. General HireFlow company membership is independent of this Gmail audience restriction.
+- Remaining verification: deliver a clearly labeled synthetic resume email to the connected mailbox, confirm automatic candidate matching and download the actual imported PDF. The test email and synthetic PDF are prepared in ignored `tmp/pdfs/`; sending awaits explicit user authorization. Existing synthetic HTTP/database tests prove access controls and matching logic but do not replace this real Gmail attachment check.
