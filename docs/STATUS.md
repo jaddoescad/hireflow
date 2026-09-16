@@ -35,7 +35,7 @@ Quo uses the dedicated **hireflow-production** key and Production line `PNHtOrvj
 
 The HireFlow Cloudflare Worker and D1 database were deleted; its email sending was disabled and its generated DNS records removed. A final DNS search for HireFlow returned no records. Workers Paid renewal is canceled, ending October 11, 2026. Unrelated applications, domain records and subscriptions were preserved.
 
-The repository includes an MIT license, setup/contribution instructions, environment example, migrations, integration guide, reusable sign-in email template and generated design reference. It is prepared for the owner's GitHub publication; no public repository has been created by this task.
+The repository includes an MIT license, setup/contribution instructions, environment example, migrations, integration guide, reusable sign-in email template and generated design reference. The source is published at https://github.com/jaddoescad/hireflow under the MIT license. The repository is connected to the existing HireFlow Vercel project.
 
 ## September 16 interaction update
 
@@ -59,3 +59,12 @@ Deployment `dpl_2t6KebRPTeartFQ4tzhWEVYQnFQL` is **READY** and serves the produc
 - **Real resume email verified:** after explicit owner authorization, sent one clearly labeled synthetic test from `hireflow@homeproapps.com` to `hiring@paintersottawa.com`. Gmail displayed it in the inbox with its PDF. HireFlow imported it through the Gmail API at 14:02:57 UTC and automatically matched the synthetic candidate by email. The live candidate Chat showed its subject, body and attachment link. Clicking that link produced HTTP 200 from the authenticated attachment endpoint. The private stored PDF matched all 1,809 original bytes (SHA-256 `f95baf59c393f63d2a57ba62d2e7e2b48aef9b12e2413b5e465c95220f0c54f1`).
 
 - **Retry and cleanup verified:** the automatic 14:05:22 UTC cron returned HTTP 200 and completed at 14:05:23 with no error; the real test message still had exactly one activity. Removed only the synthetic candidate, imported test activity and private test PDF after verification. The labeled test email remains in the Gmail inbox. No real applicant records were changed.
+
+## Public repository verification — September 16
+
+- Public source: https://github.com/jaddoescad/hireflow; production: https://hireflow-theta-seven.vercel.app.
+- README expanded with local setup, integration requirements, deployment instructions, verification, and access boundaries.
+- Git history scanned against configured private credentials and current applicant names, email addresses, and phone numbers: no matches.
+- Clean checkout: 14 unit tests, TypeScript check, and production build passed.
+- Live database, HTTP, and Gmail verification passed, including company isolation, invitations, disabled memberships, hiring actions, intake and webhook retries, and private attachments. Synthetic verification records were removed.
+- Existing unfinished local settings UI changes were excluded from publication.
