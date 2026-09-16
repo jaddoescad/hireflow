@@ -3,7 +3,7 @@
 Verified September 15–16, 2026.
 
 - **Production:** https://hireflow-theta-seven.vercel.app
-- **Deployment:** `dpl_B19Y7epioRE2wRgHa72L8Cp1bDpT`, ready and aliased to production.
+- **Deployment:** `dpl_HX3xMCtVEQP6Biyg3VXVPc4tzYGP`, ready and aliased to production.
 - **Database and authentication:** dedicated HireFlow Supabase project `slpzezujtpjrxlugalqs`, Canada Central; all four migrations applied.
 - **Admin:** `info@paintersottawa.com`; both email-link and one-time-code login verified through the real Gmail inbox. The restored account has no migrated password and can use email sign-in.
 - **Sender:** `hireflow@homeproapps.com`, MXroute port 587, configured separately for Supabase Auth and application invitations. MX, SPF and DKIM verified. Fixed the MXroute local-delivery setting for paintersottawa.com to match its Google-hosted mailbox. Auth email limit: 30/hour. Leaked-password protection enabled; the security advisor reports no warnings. The two no-policy notices are expected for server-only integration and invitation tables.
@@ -36,3 +36,9 @@ Quo uses the dedicated **hireflow-production** key and Production line `PNHtOrvj
 The HireFlow Cloudflare Worker and D1 database were deleted; its email sending was disabled and its generated DNS records removed. A final DNS search for HireFlow returned no records. Workers Paid renewal is canceled, ending October 11, 2026. Unrelated applications, domain records and subscriptions were preserved.
 
 The repository includes an MIT license, setup/contribution instructions, environment example, migrations, integration guide, reusable sign-in email template and generated design reference. It is prepared for the owner's GitHub publication; no public repository has been created by this task.
+
+## September 16 interaction update
+
+Kanban moves now update cards and counts immediately, serialize rapid writes per candidate, and preserve pending destinations through background refreshes. Save feedback, Undo, rollback with Retry, focused drop targets and edge scrolling are implemented. Local browser checks held save requests open and verified refresh, failure, retry and undo; production drag testing independently confirmed immediate placement before the request was released and persisted stage afterward. All synthetic test records were removed. Eight unit tests, TypeScript and production build pass.
+
+The combined deployment also includes the compact Chat-first candidate view from the parallel task. That task verified desktop/mobile presentation, server-side chat filtering before pagination and company authorization against production.
