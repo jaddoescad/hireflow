@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
+  BarChart3,
   ChevronDown,
   LayoutDashboard,
   Users,
@@ -28,6 +29,7 @@ import { Logo, Avatar, Modal, Field, Empty } from "./primitives";
 import { HiringBoard } from "./hiring-board";
 import { CandidateDetail, CandidateEditor } from "./candidate-detail";
 import { Team } from "./team";
+import { Metrics } from "./metrics";
 import { Settings } from "./settings";
 export function Workspace() {
   const [serverData, setData] = useState<WorkspaceData | null>(null);
@@ -110,6 +112,8 @@ export function Workspace() {
       setLoading(false);
       return;
     }
+    const initialView = new URLSearchParams(location.search).get("view");
+    if (initialView && ["metrics", "team", "settings"].includes(initialView)) setView(initialView);
     if (new URLSearchParams(location.search).has("gmail")) setView("settings");
     companyRef.current = new URLSearchParams(location.search).get("company");
     void load(companyRef.current);
@@ -222,6 +226,13 @@ export function Workspace() {
         setError(e instanceof Error ? e.message : "Could not save change");
       throw e;
     }
+  }
+  function changeView(next: string) {
+    setView(next);
+    const url = new URL(location.href);
+    if (next === "hiring") url.searchParams.delete("view");
+    else url.searchParams.set("view", next);
+    history.replaceState(null, "", `${url.pathname}${url.search}`);
   }
   async function choose(id: string | null) {
     companyRef.current = id;
@@ -412,21 +423,27 @@ export function Workspace() {
         <nav>
           <button
             className={view === "hiring" ? "active" : ""}
-            onClick={() => setView("hiring")}
+            onClick={() => changeView("hiring")}
           >
             <LayoutDashboard size={19} /> Hiring{" "}
             <span>{data.candidates.length}</span>
           </button>
           <button
+            className={view === "metrics" ? "active" : ""}
+            onClick={() => changeView("metrics")}
+          >
+            <BarChart3 size={19} /> Metrics
+          </button>
+          <button
             className={view === "team" ? "active" : ""}
-            onClick={() => setView("team")}
+            onClick={() => changeView("team")}
           >
             <Users size={19} /> Team
           </button>
           {admin && (
             <button
               className={view === "settings" ? "active" : ""}
-              onClick={() => setView("settings")}
+              onClick={() => changeView("settings")}
             >
               <SettingsIcon size={19} /> Settings
             </button>
@@ -478,6 +495,8 @@ export function Workspace() {
               else setSignal(a);
             }}
           />
+        ) : view === "metrics" ? (
+          <Metrics key={data.company.id} data={data} onCandidate={(c) => setSelected(c.id)} />
         ) : view === "team" ? (
           <Team data={data} mutate={mutate} />
         ) : admin ? (

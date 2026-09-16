@@ -11,6 +11,7 @@ The hosted app requires sign-in. Create your own company or accept an invitation
 ## What you can do
 
 - **Manage a hiring pipeline:** create candidates, customize stages, move cards with drag-and-drop or a stage selector, and search/filter by role, experience, or tags.
+- **Understand your hiring pipeline:** filter lead volume by date, experience, role, source, stage, and imported decisions; inspect stage counts and open matching applications. See [metric definitions](docs/METRICS.md).
 - **Keep context beside the candidate:** add team notes and review Quo calls/texts, Gmail conversations, and private resume attachments.
 - **Work across companies:** switch workspaces without separate accounts. Admins manage invitations, roles, and enabled membership per company.
 - **Connect application sources:** accept authenticated Zapier/webhook submissions with stable IDs so retries do not create duplicate applications.
