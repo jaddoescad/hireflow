@@ -44,7 +44,7 @@ Kanban moves now update cards and counts immediately, serialize rapid writes per
 The combined deployment also includes the compact Chat-first candidate view from the parallel task. That task verified desktop/mobile presentation, server-side chat filtering before pagination and company authorization against production.
 
 
-## Gmail integration — connected, final resume verification pending
+## Gmail integration — live mailbox and resume verification
 
 Deployment `dpl_2t6KebRPTeartFQ4tzhWEVYQnFQL` is **READY** and serves the production alias. Unique URL: https://hireflow-8amznkvx3-jad-slims-projects.vercel.app. It includes the Gmail implementation and production Google OAuth credentials.
 
@@ -56,4 +56,6 @@ Deployment `dpl_2t6KebRPTeartFQ4tzhWEVYQnFQL` is **READY** and serves the produc
 - **Scheduled sync verified:** Vercel invoked `/api/cron/gmail` at 13:45:22 UTC with HTTP 200; the database records successful completion at 13:45:25 UTC, no error, a saved history cursor and a released lease. No manual sync was invoked for this check.
 - Dedicated Google Cloud project **HireFlow Gmail** (`integral-kit-508813-i7`) was created under the paintersottawa.com organization without selecting a billing account. Gmail API is enabled, and the Web OAuth client's callback is the production `/api/gmail/callback` URL. Client credentials remain in ignored local configuration and sensitive production variables.
 - The Google app uses **Internal** audience for the paintersottawa.com Workspace organization. This deployment's Gmail authorization does not yet support unrelated companies' Google accounts; public distribution requires an appropriate External audience and Google's applicable verification. General HireFlow company membership is independent of this Gmail audience restriction.
-- Remaining verification: deliver a clearly labeled synthetic resume email to the connected mailbox, confirm automatic candidate matching and download the actual imported PDF. The test email and synthetic PDF are prepared in ignored `tmp/pdfs/`; sending awaits explicit user authorization. Existing synthetic HTTP/database tests prove access controls and matching logic but do not replace this real Gmail attachment check.
+- **Real resume email verified:** after explicit owner authorization, sent one clearly labeled synthetic test from `hireflow@homeproapps.com` to `hiring@paintersottawa.com`. Gmail displayed it in the inbox with its PDF. HireFlow imported it through the Gmail API at 14:02:57 UTC and automatically matched the synthetic candidate by email. The live candidate Chat showed its subject, body and attachment link. Clicking that link produced HTTP 200 from the authenticated attachment endpoint. The private stored PDF matched all 1,809 original bytes (SHA-256 `f95baf59c393f63d2a57ba62d2e7e2b48aef9b12e2413b5e465c95220f0c54f1`).
+
+- **Retry and cleanup verified:** the automatic 14:05:22 UTC cron returned HTTP 200 and completed at 14:05:23 with no error; the real test message still had exactly one activity. Removed only the synthetic candidate, imported test activity and private test PDF after verification. The labeled test email remains in the Gmail inbox. No real applicant records were changed.
