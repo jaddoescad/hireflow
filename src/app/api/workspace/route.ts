@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     let integration = null;
     if (membership.role === "admin") {
       const admin = adminDb();
-      const [inv, settings] = await Promise.all([
+      const [inv, settings, gmail] = await Promise.all([
         admin
           .from("hf_invitations")
           .select("id,email,role,expires_at,accepted_at,revoked_at,created_at")
@@ -69,12 +69,27 @@ export async function GET(request: Request) {
           .select("*")
           .eq("company_id", cid)
           .single(),
+        admin
+          .from("hf_gmail_connections")
+          .select("mailbox,credentials,synced_at,last_error")
+          .eq("company_id", cid)
+          .maybeSingle(),
       ]);
       if (inv.error) throw inv.error;
       if (settings.error) throw settings.error;
+      if (gmail.error) throw gmail.error;
       invitations = inv.data;
       const s = settings.data;
       integration = {
+        gmail_available: !!(
+          process.env.GOOGLE_CLIENT_ID &&
+          process.env.GOOGLE_CLIENT_SECRET &&
+          process.env.GMAIL_TOKEN_KEY
+        ),
+        gmail_connected: !!gmail.data?.credentials,
+        gmail_mailbox: gmail.data?.mailbox || null,
+        gmail_synced_at: gmail.data?.synced_at || null,
+        gmail_error: gmail.data?.last_error || null,
         intake_configured: !!s.intake_key_hash,
         quo_configured: !!(
           s.quo_api_key &&

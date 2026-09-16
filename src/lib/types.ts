@@ -33,14 +33,23 @@ export type Activity = {
   id: string;
   company_id: string;
   candidate_id: string | null;
-  kind: "sms" | "call" | "note" | "stage";
+  kind: "sms" | "call" | "note" | "stage" | "email";
   direction: "incoming" | "outgoing" | null;
   body: string;
   phone: string | null;
   email: string | null;
   occurred_at: string;
   read_at: string | null;
-  metadata: Record<string, unknown>;
+  metadata: {
+    subject?: string;
+    attachments?: {
+      path?: string;
+      name: string;
+      size: number;
+      unavailable?: string;
+    }[];
+    [key: string]: unknown;
+  };
 };
 export type Invitation = {
   id: string;
@@ -61,6 +70,11 @@ export type Workspace = {
   activities: Activity[];
   invitations: Invitation[];
   integration: {
+    gmail_available: boolean;
+    gmail_connected: boolean;
+    gmail_mailbox: string | null;
+    gmail_synced_at: string | null;
+    gmail_error: string | null;
     intake_configured: boolean;
     quo_configured: boolean;
     quo_phone: string | null;

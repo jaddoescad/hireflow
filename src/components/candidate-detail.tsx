@@ -1,4 +1,5 @@
 "use client";
+import { EmailContent } from "./email-content";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Phone, StickyNote, ExternalLink, RefreshCw } from "lucide-react";
 import type { Activity, Candidate, Workspace } from "@/lib/types";
@@ -172,7 +173,7 @@ export function CandidateDetail({
       (a) =>
         a.candidate_id === c.id &&
         (tab === "chat"
-          ? a.kind === "sms" || a.kind === "call"
+          ? ["sms", "call", "email"].includes(a.kind)
           : a.kind === "note"),
     )
     .map((a) => a.id)
@@ -321,7 +322,11 @@ export function CandidateDetail({
                       key={a.id}
                       className={`chat-message ${a.direction === "outgoing" ? "outgoing" : "incoming"}`}
                     >
-                      <p>{a.body}</p>
+                      {a.kind === "email" ? (
+                        <EmailContent activity={a} />
+                      ) : (
+                        <p>{a.body}</p>
+                      )}
                       <time>
                         <span className="sr-only">
                           {a.direction === "outgoing"
@@ -353,7 +358,7 @@ export function CandidateDetail({
                 detail={
                   tab === "notes"
                     ? "Keep interview notes here."
-                    : "Quo messages and calls will appear here."
+                    : "Emails, messages and calls will appear here."
                 }
               />
             )}

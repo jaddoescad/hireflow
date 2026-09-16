@@ -22,6 +22,7 @@ import type {
   Activity,
 } from "@/lib/types";
 import { OptimisticMoves } from "@/lib/optimistic-moves";
+import { EmailContent } from "./email-content";
 import { Auth } from "./auth";
 import { Logo, Avatar, Modal, Field, Empty } from "./primitives";
 import { HiringBoard } from "./hiring-board";
@@ -109,6 +110,7 @@ export function Workspace() {
       setLoading(false);
       return;
     }
+    if (new URLSearchParams(location.search).has("gmail")) setView("settings");
     companyRef.current = new URLSearchParams(location.search).get("company");
     void load(companyRef.current);
     const db = browserDb();
@@ -479,7 +481,7 @@ export function Workspace() {
         ) : view === "team" ? (
           <Team data={data} mutate={mutate} />
         ) : admin ? (
-          <Settings data={data} mutate={mutate} />
+          <Settings data={data} mutate={mutate} onRefresh={() => load()} />
         ) : (
           <Empty title="Admin access required" />
         )}
@@ -560,9 +562,13 @@ export function Workspace() {
       {companyModal}
       {signal && (
         <Modal title="Match this signal" onClose={() => setSignal(null)}>
-          <p>{signal.body}</p>
+          {signal.kind === "email" ? (
+            <EmailContent activity={signal} />
+          ) : (
+            <p>{signal.body}</p>
+          )}
           <p className="muted">
-            More than one candidate uses this contact information. Choose the
+            This conversation could not be matched to one candidate. Choose the
             right person.
           </p>
           <form

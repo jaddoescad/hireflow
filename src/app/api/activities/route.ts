@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       .range(page * 50, page * 50 + 50);
     if (notes) query = query.eq("kind", "note");
     else if (params.get("chat") === "1")
-      query = query.in("kind", ["sms", "call"]);
+      query = query.in("kind", ["sms", "call", "email"]);
     const { data, error } = await query;
     if (error) throw error;
     return NextResponse.json(

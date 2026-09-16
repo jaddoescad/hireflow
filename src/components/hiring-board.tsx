@@ -7,6 +7,7 @@ import {
   Zap,
   Phone,
   MessageSquare,
+  Mail,
   ArrowUpRight,
   GripVertical,
   LoaderCircle,
@@ -101,7 +102,7 @@ export function HiringBoard({
   const signals = data.activities
     .filter(
       (a) =>
-        ["sms", "call"].includes(a.kind) &&
+        ["sms", "call", "email"].includes(a.kind) &&
         (!a.candidate_id || ids.has(a.candidate_id)),
     )
     .slice(0, 100);
@@ -187,7 +188,7 @@ export function HiringBoard({
             <h2>Signals</h2>
             <span>{signals.filter((a) => !a.read_at).length}</span>
           </div>
-          <p className="stage-description">Recent calls & messages</p>
+          <p className="stage-description">Recent conversations</p>
           <div className="stage-cards">
             {signals.length ? (
               signals.map((a) => {
@@ -205,11 +206,18 @@ export function HiringBoard({
                         <span>
                           {a.kind === "call" ? (
                             <Phone size={12} />
+                          ) : a.kind === "email" ? (
+                            <Mail size={12} />
                           ) : (
                             <MessageSquare size={12} />
                           )}{" "}
                           {a.direction === "incoming" ? "Incoming" : "Outgoing"}{" "}
-                          · {a.kind === "call" ? "Call" : "SMS"}
+                          ·{" "}
+                          {a.kind === "call"
+                            ? "Call"
+                            : a.kind === "email"
+                              ? "Email"
+                              : "SMS"}
                         </span>
                       </div>
                       {!a.read_at && <i className="unread-dot" />}
@@ -222,7 +230,7 @@ export function HiringBoard({
             ) : (
               <Empty
                 title="All quiet here"
-                detail="Quo calls and messages from candidates will appear here."
+                detail="Candidate emails, calls and messages will appear here."
               />
             )}
           </div>
@@ -288,7 +296,7 @@ export function HiringBoard({
                   const last = data.activities.find(
                     (a) =>
                       a.candidate_id === c.id &&
-                      ["sms", "call"].includes(a.kind),
+                      ["sms", "call", "email"].includes(a.kind),
                   );
                   return (
                     <button

@@ -9,6 +9,7 @@ import {
   Phone,
   Copy,
   Check,
+  Mail,
 } from "lucide-react";
 import type { Workspace, Stage } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
@@ -16,9 +17,11 @@ import { Field, Modal, when } from "./primitives";
 export function Settings({
   data,
   mutate,
+  onRefresh,
 }: {
   data: Workspace;
   mutate: Mutate;
+  onRefresh: () => Promise<void>;
 }) {
   const [stage, setStage] = useState<Stage | null | undefined>();
   const [key, setKey] = useState("");
@@ -38,6 +41,29 @@ export function Settings({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
       return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function gmailAction(action: "connect" | "sync" | "disconnect") {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/gmail/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: data.company?.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      if (result.url) {
+        window.location.assign(result.url);
+        return;
+      }
+      await onRefresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gmail connection failed.");
     } finally {
       setBusy(false);
     }
@@ -62,6 +88,73 @@ export function Settings({
             Saved.
           </div>
         )}
+        <section className="panel">
+          <div className="panel-heading">
+            <h2>
+              <Mail size={18} /> Gmail
+            </h2>
+          </div>
+          <div className="panel-form">
+            <p>
+              Bring candidate emails and resumes into Chat. Match messages by
+              email address.
+            </p>
+            {data.integration?.gmail_connected ? (
+              <>
+                <p>
+                  <strong>{data.integration.gmail_mailbox}</strong>
+                </p>
+                <p className="muted">
+                  {data.integration.gmail_synced_at
+                    ? `Last synced ${when(data.integration.gmail_synced_at)}`
+                    : "First sync in progress…"}
+                </p>
+                {data.integration.gmail_error && (
+                  <p className="error">{data.integration.gmail_error}</p>
+                )}
+                <div className="gmail-actions">
+                  <button
+                    disabled={busy}
+                    onClick={() => void gmailAction("sync")}
+                  >
+                    {busy ? "Please wait…" : "Sync now"}
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => void gmailAction("disconnect")}
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="muted">
+                  Read-only access. Email sending stays in Gmail.
+                </p>
+                <button
+                  className="primary"
+                  disabled={busy || !data.integration?.gmail_available}
+                  onClick={() => void gmailAction("connect")}
+                >
+                  Connect Gmail
+                </button>
+                {!data.integration?.gmail_available && (
+                  <p className="muted">
+                    The workspace owner needs to finish Gmail setup.
+                  </p>
+                )}
+              </>
+            )}
+            {typeof window !== "undefined" &&
+              new URLSearchParams(location.search).get("gmail") === "error" && (
+                <p className="error">
+                  Gmail wasn't connected. Try again and allow read-only email
+                  access.
+                </p>
+              )}
+          </div>
+        </section>
         <section className="panel">
           <div className="panel-heading">
             <h2>Company</h2>
