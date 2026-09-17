@@ -1017,6 +1017,32 @@ td select {
   width: 100%;
   align-self: center;
 }
+.quo-panel .panel-heading {
+  padding-block: 14px;
+  border-bottom: 0;
+}
+.quo-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 0 23px 12px;
+  font-size: 0.85rem;
+}
+.quo-summary small {
+  color: var(--muted);
+}
+.quo-settings > summary {
+  padding: 12px 23px;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.quo-settings > summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -3px;
+}
 .stage-settings {
   padding: 0 23px 18px;
 }

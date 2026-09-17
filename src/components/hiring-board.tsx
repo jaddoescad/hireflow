@@ -14,6 +14,23 @@ import {
 } from "lucide-react";
 import type { Workspace, Candidate, Activity } from "@/lib/types";
 import { Avatar, Empty, when } from "./primitives";
+
+function relativeDate(value: string) {
+  const date = new Date(value);
+  const now = new Date();
+  const days = Math.round(
+    (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())) /
+      86_400_000,
+  );
+  if (days > 0) return `${days} ${days === 1 ? "day" : "days"} ago`;
+  const minutes = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+}
+
 export type Mutate = (
   action: string,
   payload: Record<string, unknown>,
@@ -293,11 +310,6 @@ export function HiringBoard({
                     <div className="drop-placeholder">Drop into {s.name}</div>
                   )}
                 {list.map((c) => {
-                  const last = data.activities.find(
-                    (a) =>
-                      a.candidate_id === c.id &&
-                      ["sms", "call", "email"].includes(a.kind),
-                  );
                   return (
                     <button
                       className={`candidate-card ${dragging === c.id ? "is-dragging" : ""} ${pendingMoves.has(c.id) ? "is-saving" : ""}`}
@@ -332,21 +344,8 @@ export function HiringBoard({
                             <LoaderCircle size={12} className="spin" /> Saving…
                           </span>
                         ) : (
-                          <span>
-                            {last ? (
-                              <>
-                                <MessageSquare size={12} />
-                                {when(last.occurred_at)}
-                              </>
-                            ) : (
-                              <>
-                                Added{" "}
-                                {new Date(c.created_at).toLocaleDateString(
-                                  undefined,
-                                  { month: "short", day: "numeric" },
-                                )}
-                              </>
-                            )}
+                          <span title={when(c.created_at)}>
+                            Added {relativeDate(c.created_at)}
                           </span>
                         )}
                         <ArrowUpRight size={14} />

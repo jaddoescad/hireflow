@@ -323,7 +323,7 @@ export function Settings({
             </small>
           </div>
         </section>
-        <section className="panel">
+        <section className="panel quo-panel">
           <div className="panel-heading">
             <h2>
               <Phone size={18} /> Quo
@@ -336,81 +336,91 @@ export function Settings({
                 : "Not connected"}
             </span>
           </div>
-          <form
-            className="panel-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              const r = await run("integration", {
-                quo_api_key: f.get("quo_api_key"),
-                quo_phone_id: f.get("quo_phone_id"),
-                quo_phone: f.get("quo_phone"),
-                quo_signing_secret: f.get("quo_signing_secret"),
-              });
-              if (r) {
-                (e.target as HTMLFormElement)
-                  .querySelectorAll<HTMLInputElement>('input[type="password"]')
-                  .forEach((i) => (i.value = ""));
-              }
-            }}
-          >
-            <p>Connect the number your team uses to speak with candidates.</p>
-            <Field label="Quo API key">
-              <input
-                name="quo_api_key"
-                type="password"
-                autoComplete="off"
-                placeholder="Leave blank to keep current key"
-              />
-            </Field>
-            <div className="form-grid">
-              <Field label="Phone number ID">
-                <input
-                  name="quo_phone_id"
-                  defaultValue={data.integration?.quo_phone_id || ""}
-                  placeholder="PN…"
-                  required
-                />
-              </Field>
-              <Field label="Phone number">
-                <input
-                  name="quo_phone"
-                  type="tel"
-                  defaultValue={data.integration?.quo_phone || ""}
-                  placeholder="+13433265133"
-                  required
-                />
-              </Field>
-            </div>
-            <Field label="Webhook URL">
-              <input
-                readOnly
-                value={`${base}/api/webhooks/quo/${data.company?.id}`}
-              />
-            </Field>
-            <p className="muted">
-              In Quo, subscribe this URL to incoming and outgoing messages and
-              completed calls for this number. Paste the message and call
-              signing secrets below, separated by commas.
-            </p>
-            <Field label="Webhook signing secrets">
-              <input
-                name="quo_signing_secret"
-                type="password"
-                autoComplete="off"
-                placeholder="Leave blank to keep current secret"
-              />
-            </Field>
-            <button className="primary" disabled={busy}>
-              Save Quo connection
-            </button>
+          <div className="quo-summary">
+            {data.integration?.quo_phone && (
+              <strong>{data.integration.quo_phone}</strong>
+            )}
             <small>
               Last event:{" "}
               {data.integration?.last_quo_at
                 ? when(data.integration.last_quo_at)
                 : "No events received yet"}
             </small>
-          </form>
+          </div>
+          <details className="quo-settings" open={!data.integration?.quo_configured}>
+            <summary>
+              {data.integration?.quo_configured ? "Edit connection" : "Connect Quo"}
+            </summary>
+            <form
+              className="panel-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const f = new FormData(e.currentTarget);
+                const r = await run("integration", {
+                  quo_api_key: f.get("quo_api_key"),
+                  quo_phone_id: f.get("quo_phone_id"),
+                  quo_phone: f.get("quo_phone"),
+                  quo_signing_secret: f.get("quo_signing_secret"),
+                });
+                if (r) {
+                  (e.target as HTMLFormElement)
+                    .querySelectorAll<HTMLInputElement>('input[type="password"]')
+                    .forEach((i) => (i.value = ""));
+                }
+              }}
+            >
+              <p>Connect the number your team uses to speak with candidates.</p>
+              <Field label="Quo API key">
+                <input
+                  name="quo_api_key"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Leave blank to keep current key"
+                />
+              </Field>
+              <div className="form-grid">
+                <Field label="Phone number ID">
+                  <input
+                    name="quo_phone_id"
+                    defaultValue={data.integration?.quo_phone_id || ""}
+                    placeholder="PN…"
+                    required
+                  />
+                </Field>
+                <Field label="Phone number">
+                  <input
+                    name="quo_phone"
+                    type="tel"
+                    defaultValue={data.integration?.quo_phone || ""}
+                    placeholder="+13433265133"
+                    required
+                  />
+                </Field>
+              </div>
+              <Field label="Webhook URL">
+                <input
+                  readOnly
+                  value={`${base}/api/webhooks/quo/${data.company?.id}`}
+                />
+              </Field>
+              <p className="muted">
+                In Quo, subscribe this URL to incoming and outgoing messages and
+                completed calls for this number. Paste the message and call
+                signing secrets below, separated by commas.
+              </p>
+              <Field label="Webhook signing secrets">
+                <input
+                  name="quo_signing_secret"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Leave blank to keep current secret"
+                />
+              </Field>
+              <button className="primary" disabled={busy}>
+                Save Quo connection
+              </button>
+            </form>
+          </details>
         </section>
       </div>
       {stage !== undefined && (
