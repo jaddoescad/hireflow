@@ -46,12 +46,20 @@ export async function POST(request: Request) {
       for (const key of ["quo_api_key", "quo_signing_secret"])
         if (payload[key] === "") delete payload[key];
     }
-    const { data, error } = await db.rpc("hf_mutate", {
-      actor: user.id,
-      cid,
-      action,
-      payload,
-    });
+    const scoreAction = [
+      "score_category_save",
+      "score_category_remove",
+      "scores_save",
+    ].includes(action);
+    const { data, error } = await db.rpc(
+      scoreAction ? "hf_score_mutate" : "hf_mutate",
+      {
+        actor: user.id,
+        cid,
+        action,
+        payload,
+      },
+    );
     if (error) throw new Error(error.message);
     let invitation_url;
     let email_sent = false;

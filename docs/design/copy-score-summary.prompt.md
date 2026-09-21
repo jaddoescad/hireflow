@@ -1,0 +1,1 @@
+Create a compact web UI reference for a hiring interview scorecard. White background, restrained black text, a small outlined Copy summary button aligned right directly above Interview assessment heading. Average 3.7 / 5 on right. Below two sample rows Communication 4/5 and Relevant experience 3/5. Synthetic data only. No extra panels. Minimal clean functional interface.

@@ -12,3 +12,11 @@ dist/
 .dev.vars*
 !.dev.vars.example
 wrangler.jsonc
+
+# Generated design references stay local.
+docs/design/*.png
+docs/design/*.jpg
+docs/design/*.jpeg
+docs/design/*.webp
+docs/design/*.gif
+docs/design/*.avif

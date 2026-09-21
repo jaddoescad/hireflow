@@ -28,6 +28,8 @@ export type Candidate = {
   attributes: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  score_average?: number | null;
+  score_count?: number;
 };
 export type Activity = {
   id: string;
@@ -60,12 +62,35 @@ export type Invitation = {
   revoked_at: string | null;
   created_at: string;
 };
+export type ScoreCategory = {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string;
+  position: number;
+  archived_at: string | null;
+};
+export type CandidateScore = {
+  company_id: string;
+  candidate_id: string;
+  category_id: string;
+  rating: number | null;
+  note: string;
+  updated_by: string | null;
+  updated_at: string;
+  version: number;
+};
+export type ScorecardData = {
+  categories: ScoreCategory[];
+  scores: CandidateScore[];
+};
 export type Workspace = {
   companies: Company[];
   company: Company | null;
   membership: Member | null;
   members: Member[];
   stages: Stage[];
+  score_categories: ScoreCategory[];
   candidates: Candidate[];
   activities: Activity[];
   invitations: Invitation[];

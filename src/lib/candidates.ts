@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Candidate } from "./types";
 export async function allCandidates(db: SupabaseClient, company: string) {
   const first = await db
-    .from("hf_candidates")
+    .from("hf_candidates_with_scores")
     .select("*", { count: "exact" })
     .eq("company_id", company)
     .order("id")
@@ -17,7 +17,7 @@ export async function allCandidates(db: SupabaseClient, company: string) {
         { length: Math.min(4, Math.ceil((total - start) / 1000)) },
         (_, i) =>
           db
-            .from("hf_candidates")
+            .from("hf_candidates_with_scores")
             .select("*")
             .eq("company_id", company)
             .order("id")

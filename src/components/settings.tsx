@@ -14,6 +14,7 @@ import {
 import type { Workspace, Stage } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
 import { Field, Modal, when } from "./primitives";
+import { ScoreSettings } from "./score-settings";
 export function Settings({
   data,
   mutate,
@@ -74,7 +75,7 @@ export function Settings({
         <div>
           <div className="eyebrow">WORKSPACE / SETTINGS</div>
           <h1>Make it your process</h1>
-          <p>Stages and connections for {data.company?.name}.</p>
+          <p>Stages, interview scores, and connections for {data.company?.name}.</p>
         </div>
       </header>
       <div className="content-body settings-grid">
@@ -88,6 +89,7 @@ export function Settings({
             Saved.
           </div>
         )}
+        <ScoreSettings data={data} mutate={mutate} />
         <section className="panel">
           <div className="panel-heading">
             <h2>

@@ -9,7 +9,6 @@ import {
   MessageSquare,
   Mail,
   ArrowUpRight,
-  GripVertical,
   LoaderCircle,
 } from "lucide-react";
 import type { Workspace, Candidate, Activity } from "@/lib/types";
@@ -24,9 +23,13 @@ function relativeDate(value: string) {
       86_400_000,
   );
   if (days > 0) return `${days} ${days === 1 ? "day" : "days"} ago`;
-  const minutes = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 60_000));
+  const minutes = Math.max(
+    0,
+    Math.floor((now.getTime() - date.getTime()) / 60_000),
+  );
   if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  if (minutes < 60)
+    return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
   const hours = Math.floor(minutes / 60);
   return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
 }
@@ -329,7 +332,23 @@ export function HiringBoard({
                           <strong>{c.name}</strong>
                           <span>{c.job_title || "Role not specified"}</span>
                         </div>
-                        <GripVertical size={14} className="grip" />
+                        <span
+                          className={`candidate-score-badge ${c.score_average == null ? "unrated" : c.score_average >= 8 ? "high" : c.score_average >= 6 ? "medium" : "low"}`}
+                          title={
+                            c.score_average == null
+                              ? "Not scored"
+                              : `Interview average: ${c.score_average.toFixed(1)} / 10 · ${c.score_count} of ${data.score_categories.length} rated`
+                          }
+                          aria-label={
+                            c.score_average == null
+                              ? "Not scored"
+                              : `Interview average ${c.score_average.toFixed(1)} out of 10, ${c.score_count} of ${data.score_categories.length} categories rated`
+                          }
+                        >
+                          {c.score_average == null
+                            ? "—"
+                            : c.score_average.toFixed(1)}
+                        </span>
                       </div>
                       <div className="tags">
                         {c.experience && <span>{c.experience}</span>}

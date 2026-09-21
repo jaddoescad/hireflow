@@ -24,6 +24,7 @@ export async function GET(request: Request) {
       membership: null,
       members: [],
       stages: [],
+      score_categories: [],
       candidates: [],
       activities: [],
       invitations: [],
@@ -47,11 +48,17 @@ export async function GET(request: Request) {
         .eq("company_id", cid)
         .order("occurred_at", { ascending: false })
         .limit(1000),
+      db
+        .from("hf_score_categories")
+        .select("*")
+        .eq("company_id", cid)
+        .is("archived_at", null)
+        .order("position")
+        .order("id"),
     ]);
     for (const result of results) if (result.error) throw result.error;
-    const [members, stages, candidates, activities] = results.map(
-      (r) => r.data!,
-    );
+    const [members, stages, candidates, activities, score_categories] =
+      results.map((r) => r.data!);
     const membership = members.find((m) => m.user_id === user.id && m.enabled);
     if (!membership) return failure(new Error("Company access denied."), 403);
     let invitations: unknown[] = [];
@@ -109,6 +116,7 @@ export async function GET(request: Request) {
         membership,
         members,
         stages,
+        score_categories,
         candidates,
         activities,
         invitations,

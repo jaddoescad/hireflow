@@ -5,6 +5,7 @@ import { Phone, StickyNote, ExternalLink, RefreshCw } from "lucide-react";
 import type { Activity, Candidate, Workspace } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
 import { Field, Modal, when, Empty } from "./primitives";
+import { InterviewScorecard } from "./interview-scorecard";
 export function CandidateEditor({
   candidate,
   data,
@@ -147,6 +148,7 @@ export function CandidateDetail({
   onEdit: () => void;
 }) {
   const [tab, setTab] = useState("chat");
+  const [scoresDirty, setScoresDirty] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -179,7 +181,7 @@ export function CandidateDetail({
     .map((a) => a.id)
     .join(",");
   useEffect(() => {
-    if (tab === "details") return;
+    if (tab !== "chat" && tab !== "notes") return;
     const controller = new AbortController();
     historyRequest.current = controller;
     setError("");
@@ -225,10 +227,31 @@ export function CandidateDetail({
     }
   }
   return (
-    <Modal title={c.name} onClose={onClose} wide className="candidate-dialog">
+    <Modal
+      title={c.name}
+      onClose={() => {
+        if (
+          !scoresDirty ||
+          window.confirm("Discard your unsaved interview scores?")
+        )
+          onClose();
+      }}
+      wide
+      className="candidate-dialog"
+    >
       <div className="candidate-summary">
         <span>{c.job_title || "Role not specified"}</span>
-        <button onClick={onEdit}>Edit</button>
+        <button
+          onClick={() => {
+            if (
+              !scoresDirty ||
+              window.confirm("Discard your unsaved interview scores?")
+            )
+              onEdit();
+          }}
+        >
+          Edit
+        </button>
       </div>
       <div className="candidate-controls">
         {c.phone ? (
@@ -256,7 +279,7 @@ export function CandidateDetail({
         </select>
       </div>
       <div className="tabs" role="tablist">
-        {["chat", "notes", "details"].map((t) => (
+        {["chat", "notes", "scores", "details"].map((t) => (
           <button
             key={t}
             role="tab"
@@ -267,7 +290,17 @@ export function CandidateDetail({
           </button>
         ))}
       </div>
-      {tab === "details" ? (
+      <div className="scorecard-slot" hidden={tab !== "scores"}>
+        <InterviewScorecard
+          key={c.id}
+          candidate={c}
+          data={data}
+          mutate={mutate}
+          active={tab === "scores"}
+          onDirtyChange={setScoresDirty}
+        />
+      </div>
+      {tab === "scores" ? null : tab === "details" ? (
         <dl className="details-list">
           <dt>Email</dt>
           <dd>{c.email || "Not provided"}</dd>

@@ -21,6 +21,32 @@ const candidate = {
   tags: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
 };
 export const actions = {
+  score_category_save: z.object({
+    id: id.optional(),
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(500).default(""),
+  }),
+  score_category_remove: z.object({ id }),
+  scores_save: z.object({
+    rating_scale: z.literal(10, { error: "The rating scale changed. Refresh the page before saving." }),
+    candidate_id: id,
+    scores: z
+      .array(
+        z.object({
+          category_id: id,
+          rating: z.number().int().min(0).max(10).nullable(),
+          note: z.string().trim().max(2000).default(""),
+          expected_version: z.number().int().min(1).max(2147483647).nullable(),
+        }),
+      )
+      .min(1)
+      .max(50)
+      .refine(
+        (scores) =>
+          new Set(scores.map((s) => s.category_id)).size === scores.length,
+        "Each category can only appear once.",
+      ),
+  }),
   quo_sync: z.object({ candidate_id: id }),
   stage_reorder: z.object({ id, direction: z.enum(["up", "down"]) }),
   create_company: z.object({ name: z.string().trim().min(1).max(100) }),
@@ -86,9 +112,16 @@ export const intakeSchema = z
     const type = attributes["Applicant Type"];
     if (typeof type === "string" && type.trim() && type.length <= 60)
       tags.add(type.trim());
-    if (attributes["Led Crew Before"] === "Yes") tags.add("Crew lead experience");
-    if (attributes["Transportation Answer"] === "Yes") tags.add("Own transportation");
-    return { ...value, phone, attributes, tags: candidate.tags.parse([...tags]) };
+    if (attributes["Led Crew Before"] === "Yes")
+      tags.add("Crew lead experience");
+    if (attributes["Transportation Answer"] === "Yes")
+      tags.add("Own transportation");
+    return {
+      ...value,
+      phone,
+      attributes,
+      tags: candidate.tags.parse([...tags]),
+    };
   })
   .refine((v) => v.email || v.phone, {
     message: "An email or phone number is required.",

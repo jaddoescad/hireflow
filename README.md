@@ -13,6 +13,7 @@ The hosted app requires sign-in. Create your own company or accept an invitation
 - **Manage a hiring pipeline:** create candidates, customize stages, move cards with drag-and-drop or a stage selector, and search/filter by role, experience, or tags.
 - **Understand your hiring pipeline:** filter lead volume by date, experience, role, source, stage, and imported decisions; inspect stage counts and open matching applications. See [metric definitions](docs/METRICS.md).
 - **Keep context beside the candidate:** add team notes and review Quo calls/texts, Gmail conversations, and private resume attachments.
+- **Rate voice interviews:** use one shared 0–10 scorecard for all positions in each company. Admins add, edit, and remove categories in Settings. Candidate cards show a compact colored average; open Scores to enter ratings and notes.
 - **Work across companies:** switch workspaces without separate accounts. Admins manage invitations, roles, and enabled membership per company.
 - **Connect application sources:** accept authenticated Zapier/webhook submissions with stable IDs so retries do not create duplicate applications.
 - **Make your own hiring decisions:** no AI agents, automated scoring, or automated hiring decisions.
@@ -88,6 +89,8 @@ node --env-file=.env.local --import tsx scripts/import-hiring-sheet.ts /path/to/
 
 ## Deploy your own instance
 
+Apply new database migrations before deploying the matching application update. The interview scorecard migration seeds the default categories for existing companies and new company creation.
+
 1. Fork or clone this repository and import it into Vercel as a **Next.js** project, using the repository root.
 2. Configure your dedicated Supabase project and apply the migrations.
 3. Set the environment variables from `.env.example` in Vercel. Use your canonical HTTPS origin for `APP_URL`. Keep service credentials, SMTP passwords, OAuth secrets, and encryption keys server-side.
@@ -98,10 +101,18 @@ node --env-file=.env.local --import tsx scripts/import-hiring-sheet.ts /path/to/
 
 ## Verification
 
+Interview scores are entered by your team. Card averages give equal weight to assessed, active categories; unassessed and removed categories are excluded. Green means 4–5, amber 3–3.9, red below 3, and a gray dash means unscored. Hover over a badge for the rating count. Removing a category preserves its existing ratings under Removed categories. Conflicting edits require a reload before saving.
+
 ```sh
 npm test
 npm run typecheck
 npm run build
+```
+
+On an isolated development database with all migrations applied, the scorecard SQL regression checks cover company isolation, disabled memberships, server-only writes, averages, edit conflicts, removed-category history, invitations, hiring stages, and intake/call retries. Fixtures are synthetic and rolled back:
+
+```sh
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/scorecard.sql
 ```
 
 GitHub Actions runs these checks on pull requests and pushes to `main`, without production secrets or a live database.
