@@ -187,9 +187,9 @@ function InterviewEditor({data,session,onClose,onSave}:{data:Workspace;session:I
       <option value="">Choose a candidate</option>{data.candidates.filter(c=>c.email).map(c=><option key={c.id} value={c.id}>{c.name}{c.job_title?` · ${c.job_title}`:""}</option>)}
     </select></Field>
     <Field label="Session title"><input name="title" required maxLength={160} defaultValue={session?.title||"Interview"}/></Field>
-    <div className="form-grid"><Field label="Starts"><input type="datetime-local" name="starts_at" required defaultValue={session?localDateTime(session.starts_at):""}/></Field>
-      <Field label="Ends"><input type="datetime-local" name="ends_at" required defaultValue={session?localDateTime(session.ends_at):""}/></Field></div>
-    <small>Times are in {timezone}.</small>
+    <div className="interview-time-grid"><Field label="Start"><input type="datetime-local" name="starts_at" required defaultValue={session?localDateTime(session.starts_at):""}/></Field>
+      <Field label="End"><input type="datetime-local" name="ends_at" required defaultValue={session?localDateTime(session.ends_at):""}/></Field></div>
+    <small className="interview-timezone">{timezone}</small>
     <fieldset className="interviewer-picker"><legend>Internal interviewers</legend>{data.members.filter(m=>m.enabled).map(m=><label key={m.user_id}><input type="checkbox" checked={members.includes(m.user_id)} onChange={e=>setMembers(e.target.checked?[...members,m.user_id]:members.filter(id=>id!==m.user_id))}/><span>{m.email}</span></label>)}</fieldset>
     <label className="interview-checkbox"><input type="checkbox" name="auto_record" defaultChecked={session?.auto_record??true}/> Automatically record this interview</label>
     <p className="muted">Requires eligible Google Workspace recording access. Google notifies participants when recording starts. Invitations and changes are emailed to the candidate and selected interviewers.</p>

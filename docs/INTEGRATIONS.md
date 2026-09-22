@@ -84,7 +84,7 @@ Without this, new recordings and meeting start/end times appear within about fiv
 ### Behaviour
 
 - Each session's scheduling is synced separately from its recording setup and from each recording (in progress, processing, available). Google deletes conference records 30 days after a meeting, so HireFlow saves recording links as soon as it sees them.
-- Changes made directly in Google Calendar (time, title, cancellation) flow back into HireFlow. A HireFlow edit sends updated invitations. Known RSVPs are kept for guests who stay invited.
+- Changes made directly in Google Calendar (time, title, cancellation) flow back into HireFlow. A HireFlow edit sends updated invitations. Google may ask guests to RSVP again after a time change; HireFlow shows Google's latest response.
 - A queued change runs only while its author and every selected interviewer are still enabled members. Outcomes that belong to an older revision are discarded.
 - The organizer can change only after the previous organizer's interviews settle (no queued changes, and three days past the last held or scheduled interview).
 - Disconnect stops syncing, removes the event subscription, and revokes the Google grant unless the same account is still connected elsewhere in HireFlow. Sessions and recording links remain.

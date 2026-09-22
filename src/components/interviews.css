@@ -1,2 +1,28 @@
 .interviews-page{padding:32px;max-width:1700px;margin:auto}.interviews-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}.interviews-heading p{margin-top:6px}.interview-connection{display:flex;justify-content:space-between;align-items:center;gap:16px;border:1px solid var(--line);padding:14px 16px;border-radius:9px;margin:20px 0;background:var(--surface)}.interview-connection>div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.interview-connection small,.interview-agenda-row small,.interview-recording small{display:block;margin-top:4px}.interview-calendar-toolbar,.interview-calendar-toolbar>div{display:flex;align-items:center;gap:8px}.interview-calendar-toolbar{justify-content:space-between;margin:24px 0 16px}.interview-calendar-toolbar h2{margin-left:12px}.interview-calendar-scroll{overflow:auto;border:1px solid var(--line);border-radius:10px}.interview-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-width:700px}.calendar-weekday{text-align:center;padding:13px;color:var(--muted);font-size:.8rem;background:var(--surface)}.calendar-day{min-height:128px;padding:8px;border-top:1px solid var(--line);border-right:1px solid var(--line)}.calendar-day:nth-child(7n){border-right:0}.calendar-day.outside{background:#fafbfd;color:#9da7b5}.calendar-day.today{background:#f1f6ff}.calendar-date{font-size:.8rem;display:inline-flex;width:25px;height:25px;align-items:center;justify-content:center}.today .calendar-date{background:var(--blue);color:white;border-radius:50%}.calendar-event{background:#e8f0ff;border-left:3px solid var(--blue);border-radius:4px;margin-top:7px;overflow:hidden}.calendar-event>a,.calendar-event>button{display:flex;flex-direction:column;align-items:flex-start;width:100%;gap:3px;padding:7px;color:#21467e;text-align:left;font-size:.72rem;border:0;background:transparent}.calendar-event strong{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.calendar-event .event-details{border-top:1px solid #d3e1f5;padding:4px 7px;font-size:.65rem}.calendar-event.cancelled{opacity:.65;border-left-color:var(--muted);background:#eef0f3}.calendar-event.cancelled strong{text-decoration:line-through}.interview-agenda{margin-top:26px}.interview-agenda h2{margin-bottom:12px}.interview-agenda-row{padding:16px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px}.interview-agenda-row>div:last-child{display:flex;align-items:center;gap:15px}.interview-agenda-row a,.interview-recording a{display:inline-flex;align-items:center;gap:6px;font-size:.85rem}.interview-empty{display:flex;flex-direction:column;gap:10px;align-items:center;padding:35px;color:var(--muted);text-align:center}.interview-details{display:flex;flex-direction:column;gap:16px}.interview-attendee{display:flex;justify-content:space-between;gap:12px;font-size:.85rem;overflow-wrap:anywhere}.interview-detail-actions{display:flex;gap:8px;flex-wrap:wrap}.interview-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:7px;font-size:.875rem}.interview-recording{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}.interview-recording>div{flex:1}.interviewer-picker{border:1px solid var(--line);border-radius:8px;padding:12px;margin:20px 0}.interviewer-picker label,.interview-checkbox{display:flex;align-items:center;gap:10px;font-size:.875rem;margin:10px 0}.interviewer-picker input,.interview-checkbox input{width:17px;height:17px;flex-shrink:0}.interviewer-picker span{overflow-wrap:anywhere}.interview-notice{padding:10px 14px;background:#eef6ff;border-radius:7px;margin:12px 0;color:#21467e}
 @media(max-width:800px){.interviews-page{padding:20px 16px}.interviews-heading,.interview-connection{align-items:flex-start;flex-direction:column}.interview-calendar-toolbar{flex-wrap:wrap}.interview-calendar-toolbar h2{font-size:1rem;margin-left:4px}.interview-agenda-row{align-items:flex-start;flex-direction:column}.interview-attendee{flex-direction:column;gap:4px}.interview-recording{flex-wrap:wrap}.interview-recording a{width:100%;margin-left:33px}}
+
+.interview-time-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.interview-time-grid .field {
+  min-width: 0;
+  gap: 5px;
+  margin: 0;
+}
+.interview-time-grid input {
+  min-height: 38px;
+  padding: 8px 9px;
+  font-size: .8125rem;
+}
+.interview-timezone {
+  display: block;
+  margin-top: 5px;
+}
+@media (max-width: 500px) {
+  .interview-time-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
