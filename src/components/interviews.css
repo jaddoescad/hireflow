@@ -3,7 +3,7 @@
 
 .interview-time-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .interview-time-grid .field {
@@ -22,7 +22,10 @@
 }
 @media (max-width: 500px) {
   .interview-time-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
+  }
+  .interview-time-grid .field:first-child {
+    grid-column: 1 / -1;
   }
 }

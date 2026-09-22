@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { googleMeetUrl, interviewSchema, meetingWindowOpen, recordingUrl } from "../src/lib/interviews";
+import { googleMeetUrl, interviewSchema, localDateTime, localInterviewWindow, meetingWindowOpen, recordingUrl } from "../src/lib/interviews";
 test("only canonical Google Meet links are accepted", () => {
   assert.equal(googleMeetUrl("https://meet.google.com/abc-defg-hij?authuser=0"), "https://meet.google.com/abc-defg-hij");
   assert.equal(googleMeetUrl("http://meet.google.com/abc-defg-hij"), null);
@@ -26,4 +26,12 @@ test("interviews need a bounded duration and at least one interviewer", () => {
   assert.throws(() => interviewSchema.parse({ ...base, ends_at: "2026-09-23T04:00:00.000Z" }));
   assert.throws(() => interviewSchema.parse({ ...base, interviewer_ids: [] }));
   assert.throws(() => interviewSchema.parse({ ...base, timezone: "Mars/Base" }));
+});
+test("compact interview times preserve same-day and overnight sessions", () => {
+  const sameDay = localInterviewWindow("2026-09-22", "09:00", "09:45");
+  assert.equal(Date.parse(sameDay.ends_at) - Date.parse(sameDay.starts_at), 45 * 60000);
+  const overnight = localInterviewWindow("2026-09-22", "23:30", "00:15");
+  assert.equal(localDateTime(overnight.ends_at), "2026-09-23T00:15");
+  assert.equal(Date.parse(overnight.ends_at) - Date.parse(overnight.starts_at), 45 * 60000);
+  assert.throws(() => localInterviewWindow("2026-09-22", "09:00", ""));
 });

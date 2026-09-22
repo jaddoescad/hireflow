@@ -65,3 +65,12 @@ export function parseLocalDateTime(value: string) {
     throw new Error("This local time does not exist. Choose another time.");
   return date.toISOString();
 }
+export function localInterviewWindow(day: string, startTime: string, endTime: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime))
+    throw new Error("Choose a date, start time and end time.");
+  const starts_at = parseLocalDateTime(`${day}T${startTime}`);
+  const endDay = new Date(`${day}T12:00`);
+  if (endTime <= startTime) endDay.setDate(endDay.getDate() + 1);
+  const ends_at = parseLocalDateTime(`${localDateTime(endDay.toISOString()).slice(0, 10)}T${endTime}`);
+  return { starts_at, ends_at };
+}
