@@ -210,11 +210,11 @@ async function syncSession(company: string, session: Interview, google: Google,
   if (!space || pending || setup === "pending" || setup === "failed") {
     try {
       space ||= (await google<{ name: string }>(`https://meet.googleapis.com/v2/spaces/${meetUrl.split("/").pop()}`)).name;
-      // Only the organizer can pre-configure artifacts. Keep transcripts and Gemini notes off.
+      // Only the organizer can pre-configure artifacts. Keep transcription on and Gemini notes off.
       await google(`https://meet.googleapis.com/v2/${space}?updateMask=config.artifactConfig.recordingConfig.autoRecordingGeneration,config.artifactConfig.transcriptionConfig.autoTranscriptionGeneration,config.artifactConfig.smartNotesConfig.autoSmartNotesGeneration`, "PATCH", {
         config: { artifactConfig: {
           recordingConfig: { autoRecordingGeneration: session.auto_record ? "ON" : "OFF" },
-          transcriptionConfig: { autoTranscriptionGeneration: "OFF" },
+          transcriptionConfig: { autoTranscriptionGeneration: "ON" },
           smartNotesConfig: { autoSmartNotesGeneration: "OFF" },
         } },
       });
