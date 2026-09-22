@@ -61,3 +61,34 @@ Ordinary incoming mail matches the sender. To associate a trusted form-notificat
 ### Verification
 
 Run `npm test` and `npm run typecheck`. Against a running local app, use `APP_URL=http://localhost:3101 node --env-file=.env.local --import tsx scripts/verify-gmail.ts` to verify synthetic company isolation, disabled-member access, admin-only connections, private resume downloads, automatic matching, manual linking, duplicate imports, exclusive leases and disconnect invalidation. The script removes its own synthetic records and files. Complete a real OAuth connection and confirm mailbox imports and scheduled runs before claiming the integration is live.
+
+## Google Meet interviews
+
+The Calendar view schedules interviews as Google Calendar events with a Google Meet link, sends invitations to the candidate and selected teammates, and attaches Meet recordings to each session. One Google Workspace account per company is the organizer: invitations come from its calendar and recordings are saved to its Google Drive. Recording requires an eligible Workspace edition (for example Business Standard) with recording allowed by the administrator. Recording starts automatically only after the organizer joins from a web browser; HireFlow cannot start or stop recording, and Gemini notes are always turned off. The candidate is never given recording access. Teammates in the same Workspace who were invited get access automatically; anyone else needs the organizer to share the file in Drive.
+
+### Server setup
+
+1. In the Google Cloud project that holds the OAuth client, enable the Google Calendar API and Google Meet REST API. Add the redirect URI `https://YOUR_APP_HOST/api/meet/callback` to the same Web OAuth client used for Gmail.
+2. Add these scopes to the consent screen: `calendar.events.owned`, `meetings.space.readonly` and `meetings.space.settings` (plus `openid` and `email`). With an **Internal** audience, no Google review is needed. An External audience needs verification of these sensitive scopes, and apps left in Testing get seven-day refresh grants.
+3. It uses the same `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_TOKEN_KEY`, `CRON_SECRET` and `APP_URL` as Gmail. `vercel.json` schedules `/api/cron/meet` every five minutes. That run creates pending events, applies edits and cancellations, refreshes responses, and collects recordings until three days after each interview.
+4. Admins connect the organizer under **Calendar → Connect Google Meet**. The account must be the Workspace address entered in HireFlow.
+
+### Instant updates (optional)
+
+Without this, new recordings and meeting start/end times appear within about five minutes. With it, Google notifies HireFlow as soon as a meeting starts or ends and as soon as a recording is ready.
+
+1. Enable the Google Workspace Events API and Pub/Sub in the same project (Pub/Sub needs a billing account). Create a topic and grant `meet-api-event-push@system.gserviceaccount.com` the **Pub/Sub Publisher** role on it.
+2. Create a service account for push authentication. Create a push subscription on the topic with endpoint `https://YOUR_APP_HOST/api/meet/events`, authentication enabled with that service account, audience equal to the endpoint URL, and an acknowledgement deadline of 60 seconds.
+3. Set `MEET_EVENTS_TOPIC=projects/PROJECT/topics/TOPIC` and `MEET_EVENTS_PUSH_ACCOUNT=<service account email>`, then reconnect Google Meet or wait for the next sync. The Calendar view shows **Instant updates on** once Google confirms the subscription. HireFlow renews it before its seven-day expiry. The five-minute sync keeps running as the recovery path.
+
+### Behaviour
+
+- Each session's scheduling is synced separately from its recording setup and from each recording (in progress, processing, available). Google deletes conference records 30 days after a meeting, so HireFlow saves recording links as soon as it sees them.
+- Changes made directly in Google Calendar (time, title, cancellation) flow back into HireFlow. A HireFlow edit sends updated invitations. Known RSVPs are kept for guests who stay invited.
+- A queued change runs only while its author and every selected interviewer are still enabled members. Outcomes that belong to an older revision are discarded.
+- The organizer can change only after the previous organizer's interviews settle (no queued changes, and three days past the last held or scheduled interview).
+- Disconnect stops syncing, removes the event subscription, and revokes the Google grant unless the same account is still connected elsewhere in HireFlow. Sessions and recording links remain.
+
+### Verification
+
+Run `npm test` and `npm run typecheck`. `scripts/verify-meet.sql` checks tenant isolation, admin-only connection, membership rules, RSVP preservation, exclusive leases, stale-result rejection, recording ownership, cancellation, organizer changes, past-session corrections, disabled members and disconnect invalidation. It uses synthetic records inside a transaction that is rolled back; run it with `psql` or the Supabase SQL editor. Before claiming the integration is live, connect the real organizer and check invitations, RSVP, a time change, a cancellation and a short recorded call from start to playback.

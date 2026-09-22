@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
+  CalendarDays,
   BarChart3,
   ChevronDown,
   LayoutDashboard,
@@ -31,6 +32,7 @@ import { CandidateDetail, CandidateEditor } from "./candidate-detail";
 import { Team } from "./team";
 import { Metrics } from "./metrics";
 import { Settings } from "./settings";
+import { Interviews } from "./interviews";
 export function Workspace() {
   const [serverData, setData] = useState<WorkspaceData | null>(null);
   const [moveTargets, setMoveTargets] = useState(new Map<string, string>());
@@ -113,7 +115,7 @@ export function Workspace() {
       return;
     }
     const initialView = new URLSearchParams(location.search).get("view");
-    if (initialView && ["metrics", "team", "settings"].includes(initialView)) setView(initialView);
+    if (initialView && ["metrics", "team", "settings", "calendar"].includes(initialView)) setView(initialView);
     if (new URLSearchParams(location.search).has("gmail")) setView("settings");
     companyRef.current = new URLSearchParams(location.search).get("company");
     void load(companyRef.current);
@@ -428,6 +430,9 @@ export function Workspace() {
             <LayoutDashboard size={19} /> Hiring{" "}
             <span>{data.candidates.length}</span>
           </button>
+          <button className={view === "calendar" ? "active" : ""} onClick={() => changeView("calendar")}>
+            <CalendarDays size={19} /> Calendar
+          </button>
           <button
             className={view === "metrics" ? "active" : ""}
             onClick={() => changeView("metrics")}
@@ -495,6 +500,8 @@ export function Workspace() {
               else setSignal(a);
             }}
           />
+        ) : view === "calendar" ? (
+          <Interviews key={data.company.id} data={data} />
         ) : view === "metrics" ? (
           <Metrics key={data.company.id} data={data} onCandidate={(c) => setSelected(c.id)} />
         ) : view === "team" ? (
