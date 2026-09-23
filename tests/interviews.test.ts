@@ -27,11 +27,11 @@ test("interviews need a bounded duration and at least one interviewer", () => {
   assert.throws(() => interviewSchema.parse({ ...base, interviewer_ids: [] }));
   assert.throws(() => interviewSchema.parse({ ...base, timezone: "Mars/Base" }));
 });
-test("compact interview times preserve same-day and overnight sessions", () => {
-  const sameDay = localInterviewWindow("2026-09-22", "09:00", "09:45");
+test("interview end times come from the start and length", () => {
+  const sameDay = localInterviewWindow("2026-09-22", "09:00", 45);
   assert.equal(Date.parse(sameDay.ends_at) - Date.parse(sameDay.starts_at), 45 * 60000);
-  const overnight = localInterviewWindow("2026-09-22", "23:30", "00:15");
+  const overnight = localInterviewWindow("2026-09-22", "23:30", 45);
   assert.equal(localDateTime(overnight.ends_at), "2026-09-23T00:15");
-  assert.equal(Date.parse(overnight.ends_at) - Date.parse(overnight.starts_at), 45 * 60000);
-  assert.throws(() => localInterviewWindow("2026-09-22", "09:00", ""));
+  assert.throws(() => localInterviewWindow("2026-09-22", "09:00", 0));
+  assert.throws(() => localInterviewWindow("2026-09-22", "", 30));
 });

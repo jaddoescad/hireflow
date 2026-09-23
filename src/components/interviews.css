@@ -11,7 +11,8 @@
   gap: 5px;
   margin: 0;
 }
-.interview-time-grid input {
+.interview-time-grid input,
+.interview-time-grid select {
   min-height: 38px;
   padding: 8px 9px;
   font-size: .8125rem;

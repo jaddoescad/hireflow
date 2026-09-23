@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, RefreshCw, Play, ExternalLink } from "lucide-react";
 import type { Workspace } from "@/lib/types";
-import { localDateTime, localInterviewWindow, type Interview, type Recording, type MeetConnection } from "@/lib/interviews";
+import { interviewLengths, localDateTime, localInterviewWindow, type Interview, type Recording, type MeetConnection } from "@/lib/interviews";
 import { Field, Modal } from "./primitives";
 import "./interviews.css";
 
@@ -172,12 +172,12 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
   const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
   const startLocal=session?localDateTime(session.starts_at):"";
-  const endLocal=session?localDateTime(session.ends_at):"";
+  const length=session?Math.round((Date.parse(session.ends_at)-Date.parse(session.starts_at))/60000):30;
   return <Modal title={session?"Edit interview":"Schedule interview"} onClose={onClose}><form onSubmit={async e=>{
     e.preventDefault();setBusy(true);setError("");
     const form=new FormData(e.currentTarget);
     try {
-      const window=localInterviewWindow(String(form.get("date")),String(form.get("start_time")),String(form.get("end_time")));
+      const window=localInterviewWindow(String(form.get("date")),String(form.get("start_time")),Number(form.get("length")));
       const result=await json("/api/interviews",{company_id:data.company!.id,payload:{
         id,version:session?.version||0,candidate_id:candidate,title:form.get("title"),
         ...window,
@@ -192,8 +192,8 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
     <Field label="Session title"><input name="title" required maxLength={160} defaultValue={session?.title||"Interview"}/></Field>
     <div className="interview-time-grid"><Field label="Date"><input type="date" name="date" required defaultValue={startLocal.slice(0,10)}/></Field>
       <Field label="Start"><input type="time" name="start_time" required defaultValue={startLocal.slice(11)}/></Field>
-      <Field label="End"><input type="time" name="end_time" required defaultValue={endLocal.slice(11)}/></Field></div>
-    <small className="interview-timezone">{timezone} · An earlier end time means the next day.</small>
+      <Field label="Length"><select name="length" defaultValue={length}>{[...new Set([...interviewLengths,length])].sort((a,b)=>a-b).map(m=><option key={m} value={m}>{m<60?`${m} min`:`${m/60} hr`}</option>)}</select></Field></div>
+    <small className="interview-timezone">{timezone}</small>
     <fieldset className="interviewer-picker"><legend>Internal interviewers</legend>{data.members.filter(m=>m.enabled).map(m=><label key={m.user_id}><input type="checkbox" checked={members.includes(m.user_id)} onChange={e=>setMembers(e.target.checked?[...members,m.user_id]:members.filter(id=>id!==m.user_id))}/><span>{m.email}</span></label>)}</fieldset>
     <label className="interview-checkbox"><input type="checkbox" name="auto_record" defaultChecked={session?.auto_record??true}/> Automatically record this interview</label>
     <p className="muted">Requires eligible Google Workspace recording access. Google notifies participants when recording starts. Invitations and changes are emailed to the candidate and selected interviewers.</p>
