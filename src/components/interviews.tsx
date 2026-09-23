@@ -165,9 +165,9 @@ export function Interviews({data}: {data:Workspace}) {
   </section>;
 }
 
-function InterviewEditor({data,session,onClose,onSave}:{data:Workspace;session:Interview|null;onClose:()=>void;onSave:(id:string)=>Promise<void>}) {
+export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:Workspace;session:Interview|null;candidateId?:string;onClose:()=>void;onSave:(id:string)=>void|Promise<void>}) {
   const [id]=useState(()=>session?.id||crypto.randomUUID());
-  const [candidate,setCandidate]=useState(session?.candidate_id||"");
+  const [candidate,setCandidate]=useState(session?.candidate_id||candidateId||"");
   const [members,setMembers]=useState(session?.interviewer_ids||[data.user.id]);
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
   const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone;

@@ -6,6 +6,7 @@ import type { Activity, Candidate, Workspace } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
 import { Field, Modal, when, Empty } from "./primitives";
 import { InterviewScorecard } from "./interview-scorecard";
+import { InterviewEditor } from "./interviews";
 export function CandidateEditor({
   candidate,
   data,
@@ -148,6 +149,8 @@ export function CandidateDetail({
   onEdit: () => void;
 }) {
   const [tab, setTab] = useState("chat");
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduled, setScheduled] = useState(false);
   const [scoresDirty, setScoresDirty] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -252,7 +255,23 @@ export function CandidateDetail({
         >
           Edit
         </button>
+        <button
+          disabled={!c.email}
+          title={c.email ? undefined : "Add an email address to invite this candidate"}
+          onClick={() => {
+            setScheduled(false);
+            setScheduling(true);
+          }}
+        >
+          Schedule interview
+        </button>
       </div>
+      {scheduled && (
+        <p role="status" className="interview-notice">
+          Interview scheduled. Google invitations and the Meet link are on
+          their way; see Calendar for details.
+        </p>
+      )}
       <div className="candidate-controls">
         {c.phone ? (
           <a href={`tel:${c.phone}`}>
@@ -455,6 +474,18 @@ export function CandidateDetail({
         </div>
       )}
       {error && <p className="error">{error}</p>}
+      {scheduling && (
+        <InterviewEditor
+          data={data}
+          session={null}
+          candidateId={c.id}
+          onClose={() => setScheduling(false)}
+          onSave={() => {
+            setScheduling(false);
+            setScheduled(true);
+          }}
+        />
+      )}
     </Modal>
   );
 }

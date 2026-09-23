@@ -47,6 +47,7 @@ export function Modal({
       className={`${wide ? "modal wide" : "modal"} ${className}`}
       onCancel={(event) => {
         event.preventDefault();
+        event.stopPropagation(); // Escape closes only the topmost nested dialog.
         onClose();
       }}
       onClick={(e) => {
