@@ -1541,6 +1541,49 @@ pre {
 }
 .candidate-summary > span {
   margin-right: auto;
+  color: var(--text);
+  font-weight: 600;
+}
+.candidate-summary button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.candidate-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  min-width: 0;
+}
+.candidate-contact a {
+  overflow-wrap: anywhere;
+}
+.candidate-tags {
+  margin: 12px 0 0;
+  flex-shrink: 0;
+}
+.tag-picker {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 16px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.tag-picker label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.85rem;
+}
+.tag-picker label input {
+  width: 16px;
+  height: 16px;
+}
+.tag-picker > input {
+  flex-basis: 100%;
 }
 .candidate-controls {
   display: flex;

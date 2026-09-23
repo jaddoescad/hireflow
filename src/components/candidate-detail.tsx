@@ -1,12 +1,36 @@
 "use client";
 import { EmailContent } from "./email-content";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Phone, StickyNote, ExternalLink, RefreshCw } from "lucide-react";
+import {
+  CalendarPlus,
+  Mail,
+  Pencil,
+  Phone,
+  StickyNote,
+  ExternalLink,
+  RefreshCw,
+} from "lucide-react";
 import type { Activity, Candidate, Workspace } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
 import { Field, Modal, when, Empty } from "./primitives";
 import { InterviewScorecard } from "./interview-scorecard";
 import { InterviewEditor } from "./interviews";
+const experienceLevels = [
+  "Less than 1 year",
+  "1-2 years",
+  "3-5 years",
+  "5+ years",
+];
+// Distinct non-empty values, most used first, plus the current value.
+function choices(values: string[], current?: string) {
+  const counts = new Map<string, number>();
+  for (const v of values)
+    if (v?.trim()) counts.set(v, (counts.get(v) || 0) + 1);
+  if (current?.trim() && !counts.has(current)) counts.set(current, 0);
+  return [...counts.keys()].sort(
+    (a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b),
+  );
+}
 export function CandidateEditor({
   candidate,
   data,
@@ -20,6 +44,15 @@ export function CandidateEditor({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const positions = choices(
+    data.candidates.map((c) => c.job_title),
+    candidate?.job_title,
+  );
+  const [position, setPosition] = useState(candidate?.job_title || "");
+  const [customPosition, setCustomPosition] = useState(false);
+  const knownTags = choices(data.candidates.flatMap((c) => c.tags));
+  const [tags, setTags] = useState(candidate?.tags || []);
+  const [newTag, setNewTag] = useState("");
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -31,17 +64,10 @@ export function CandidateEditor({
         name: f.get("name"),
         email: f.get("email"),
         phone: f.get("phone"),
-        job_title: f.get("job_title"),
+        job_title: position.trim(),
         experience: f.get("experience"),
         stage_id: f.get("stage_id"),
-        tags: [
-          ...new Set(
-            String(f.get("tags"))
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean),
-          ),
-        ],
+        tags: [...new Set([...tags, newTag.trim()].filter(Boolean))],
       });
       onClose();
     } catch (e) {
@@ -81,21 +107,43 @@ export function CandidateEditor({
               defaultValue={candidate?.phone || ""}
             />
           </Field>
-          <Field label="Applying for">
-            <input
-              name="job_title"
-              defaultValue={candidate?.job_title}
-              placeholder="Painter"
-              maxLength={100}
-            />
+          <Field label="Position">
+            {customPosition ? (
+              <input
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                placeholder="New position"
+                maxLength={100}
+                autoFocus
+              />
+            ) : (
+              <select
+                value={position}
+                onChange={(e) => {
+                  if (e.target.value === "__other__") {
+                    setPosition("");
+                    setCustomPosition(true);
+                  } else setPosition(e.target.value);
+                }}
+              >
+                <option value="">Not specified</option>
+                {positions.map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
+                <option value={"__other__"}>Other…</option>
+              </select>
+            )}
           </Field>
           <Field label="Experience">
-            <input
+            <select
               name="experience"
-              defaultValue={candidate?.experience}
-              placeholder="3–5 years"
-              maxLength={100}
-            />
+              defaultValue={candidate?.experience || ""}
+            >
+              <option value="">Not specified</option>
+              {choices(experienceLevels, candidate?.experience).map((x) => (
+                <option key={x}>{x}</option>
+              ))}
+            </select>
           </Field>
         </div>
         <Field label="Stage">
@@ -111,13 +159,32 @@ export function CandidateEditor({
             ))}
           </select>
         </Field>
-        <Field label="Tags, separated by commas">
+        <fieldset className="tag-picker">
+          <legend>Tags</legend>
+          {choices([...knownTags, ...tags]).map((t) => (
+            <label key={t}>
+              <input
+                type="checkbox"
+                checked={tags.includes(t)}
+                onChange={(e) =>
+                  setTags(
+                    e.target.checked
+                      ? [...tags, t]
+                      : tags.filter((x) => x !== t),
+                  )
+                }
+              />
+              {t}
+            </label>
+          ))}
           <input
-            name="tags"
-            defaultValue={candidate?.tags.join(", ")}
-            placeholder="Own vehicle, Interior painting"
+            aria-label="New tag"
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            placeholder="Add a new tag"
+            maxLength={60}
           />
-        </Field>
+        </fieldset>
         {error && (
           <p className="error" role="alert">
             {error}
@@ -243,7 +310,25 @@ export function CandidateDetail({
       className="candidate-dialog"
     >
       <div className="candidate-summary">
-        <span>{c.job_title || "Role not specified"}</span>
+        <span>
+          {[c.job_title || "Role not specified", c.experience]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+        <button
+          disabled={!c.email}
+          title={
+            c.email
+              ? undefined
+              : "Add an email address to invite this candidate"
+          }
+          onClick={() => {
+            setScheduled(false);
+            setScheduling(true);
+          }}
+        >
+          <CalendarPlus size={14} /> Schedule interview
+        </button>
         <button
           onClick={() => {
             if (
@@ -253,17 +338,7 @@ export function CandidateDetail({
               onEdit();
           }}
         >
-          Edit
-        </button>
-        <button
-          disabled={!c.email}
-          title={c.email ? undefined : "Add an email address to invite this candidate"}
-          onClick={() => {
-            setScheduled(false);
-            setScheduling(true);
-          }}
-        >
-          Schedule interview
+          <Pencil size={14} /> Edit
         </button>
       </div>
       {scheduled && (
@@ -273,14 +348,24 @@ export function CandidateDetail({
         </p>
       )}
       <div className="candidate-controls">
-        {c.phone ? (
-          <a href={`tel:${c.phone}`}>
-            <Phone size={14} />
-            {c.phone}
-          </a>
-        ) : (
-          <span className="muted">No phone number</span>
-        )}
+        <div className="candidate-contact">
+          {c.email ? (
+            <a href={`mailto:${c.email}`}>
+              <Mail size={14} />
+              {c.email}
+            </a>
+          ) : (
+            <span className="muted">No email</span>
+          )}
+          {c.phone ? (
+            <a href={`tel:${c.phone}`}>
+              <Phone size={14} />
+              {c.phone}
+            </a>
+          ) : (
+            <span className="muted">No phone number</span>
+          )}
+        </div>
         <select
           aria-label="Hiring stage"
           value={c.stage_id}
@@ -297,6 +382,13 @@ export function CandidateDetail({
           ))}
         </select>
       </div>
+      {c.tags.length > 0 && (
+        <div className="tags candidate-tags">
+          {c.tags.map((t) => (
+            <span key={t}>{t}</span>
+          ))}
+        </div>
+      )}
       <div className="tabs" role="tablist">
         {["chat", "notes", "scores", "details"].map((t) => (
           <button
@@ -321,12 +413,6 @@ export function CandidateDetail({
       </div>
       {tab === "scores" ? null : tab === "details" ? (
         <dl className="details-list">
-          <dt>Email</dt>
-          <dd>{c.email || "Not provided"}</dd>
-          <dt>Experience</dt>
-          <dd>{c.experience || "Not provided"}</dd>
-          <dt>Tags</dt>
-          <dd>{c.tags.join(", ") || "None"}</dd>
           <dt>Source</dt>
           <dd>{c.source}</dd>
           <dt>Added</dt>
