@@ -309,45 +309,12 @@ export function CandidateDetail({
       wide
       className="candidate-dialog"
     >
-      <div className="candidate-summary">
-        <span>
+      <div className="candidate-head">
+        <p className="candidate-role">
           {[c.job_title || "Role not specified", c.experience]
             .filter(Boolean)
             .join(" · ")}
-        </span>
-        <button
-          disabled={!c.email}
-          title={
-            c.email
-              ? undefined
-              : "Add an email address to invite this candidate"
-          }
-          onClick={() => {
-            setScheduled(false);
-            setScheduling(true);
-          }}
-        >
-          <CalendarPlus size={14} /> Schedule interview
-        </button>
-        <button
-          onClick={() => {
-            if (
-              !scoresDirty ||
-              window.confirm("Discard your unsaved interview scores?")
-            )
-              onEdit();
-          }}
-        >
-          <Pencil size={14} /> Edit
-        </button>
-      </div>
-      {scheduled && (
-        <p role="status" className="interview-notice">
-          Interview scheduled. Google invitations and the Meet link are on
-          their way; see Calendar for details.
         </p>
-      )}
-      <div className="candidate-controls">
         <div className="candidate-contact">
           {c.email ? (
             <a href={`mailto:${c.email}`}>
@@ -366,29 +333,63 @@ export function CandidateDetail({
             <span className="muted">No phone number</span>
           )}
         </div>
-        <select
-          aria-label="Hiring stage"
-          value={c.stage_id}
-          onChange={(e) =>
-            void mutate("move", { id: c.id, stage_id: e.target.value }).catch(
-              () => {},
-            )
-          }
-        >
-          {data.stages.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      {c.tags.length > 0 && (
-        <div className="tags candidate-tags">
-          {c.tags.map((t) => (
-            <span key={t}>{t}</span>
-          ))}
+        {c.tags.length > 0 && (
+          <div className="tags candidate-tags">
+            {c.tags.map((t) => (
+              <span key={t}>{t}</span>
+            ))}
+          </div>
+        )}
+        <div className="candidate-actions">
+          <select
+            aria-label="Hiring stage"
+            value={c.stage_id}
+            onChange={(e) =>
+              void mutate("move", { id: c.id, stage_id: e.target.value }).catch(
+                () => {},
+              )
+            }
+          >
+            {data.stages.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="primary"
+            disabled={!c.email}
+            title={
+              c.email
+                ? undefined
+                : "Add an email address to invite this candidate"
+            }
+            onClick={() => {
+              setScheduled(false);
+              setScheduling(true);
+            }}
+          >
+            <CalendarPlus size={15} /> Schedule interview
+          </button>
+          <button
+            onClick={() => {
+              if (
+                !scoresDirty ||
+                window.confirm("Discard your unsaved interview scores?")
+              )
+                onEdit();
+            }}
+          >
+            <Pencil size={15} /> Edit
+          </button>
         </div>
-      )}
+        {scheduled && (
+          <p role="status" className="interview-notice">
+            Interview scheduled. Google invitations and the Meet link are on
+            their way; see Calendar for details.
+          </p>
+        )}
+      </div>
       <div className="tabs" role="tablist">
         {["chat", "notes", "scores", "details"].map((t) => (
           <button
