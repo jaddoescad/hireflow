@@ -2,7 +2,8 @@ import "server-only";
 import { OAuth2Client } from "google-auth-library";
 import { adminDb, sessionDb } from "./supabase/server";
 import { openGmail } from "./gmail-crypto";
-import { googleMeetUrl, meetingWindowOpen, recordingUrl, type Interview } from "./interviews";
+import { googleMeetUrl, interviewCalendarTitle, interviewTitleFromCalendar, meetingWindowOpen, recordingUrl, type Interview } from "./interviews";
+import { notifyInterviewOrganizer } from "./interview-notifications";
 
 export const meetScopes = [
   "openid", "email",
@@ -120,7 +121,11 @@ export async function syncMeet(company: string, actor: string | null = null, ses
       for (const session of sessions) {
         if (Date.now() > deadline) break;
         done.push(session.id);
-        try { await syncSession(company, session, google, commit, deadline); synced++; }
+        try {
+          await syncSession(company, session, google, commit, deadline);
+          if (Date.now() < deadline) await notifyInterviewOrganizer(company, connection.generation, connection.lease_id, session.id, session.version);
+          synced++;
+        }
         catch (e) {
           if (authFailure(e)) throw e;
           failure = meetError(e);
@@ -175,13 +180,17 @@ async function syncSession(company: string, session: Interview, google: Google,
     return;
   }
   const known = new Map((event?.attendees || []).map(a => [a.email?.toLowerCase(), a.responseStatus]));
+  const candidate = await db.from("hf_candidates").select("name").eq("company_id", company)
+    .eq("id", session.candidate_id).single();
+  if (candidate.error) throw new Error("Could not load interview candidate.");
+  const calendarTitle = interviewCalendarTitle(session.title, candidate.data.name);
   const body = {
-    summary: session.title,
+    summary: calendarTitle,
     start: { dateTime: session.starts_at, timeZone: session.timezone },
     end: { dateTime: session.ends_at, timeZone: session.timezone },
     attendees: session.attendees.map(a => ({ email: a.email, responseStatus: known.get(a.email) || a.responseStatus || "needsAction" })),
     guestsCanModify: false, guestsCanInviteOthers: false,
-    extendedProperties: { private: { hireflow_session: session.id, hireflow_company: company, hireflow_revision: String(session.version) } },
+    extendedProperties: { private: { hireflow_session: session.id, hireflow_company: company, hireflow_revision: String(session.version), hireflow_candidate_title: "1" } },
   };
   if (!event) {
     try {
@@ -195,6 +204,14 @@ async function syncSession(company: string, session: Interview, google: Google,
     }
   } else if (pending && event.extendedProperties?.private?.hireflow_revision !== String(session.version)) {
     event = await google<GoogleEvent>(eventUrl + "?sendUpdates=all", "PATCH", body);
+  } else if (!pending && !event.extendedProperties?.private?.hireflow_candidate_title && Date.parse(session.ends_at) > Date.now()) {
+    // Add names to existing upcoming events once, without sending another guest invitation.
+    // Preserve any title edited directly in Google Calendar.
+    const title = interviewCalendarTitle(event.summary || session.title, candidate.data.name);
+    event = await google<GoogleEvent>(eventUrl + "?sendUpdates=none", "PATCH", {
+      summary: title,
+      extendedProperties: { private: { ...event.extendedProperties?.private, hireflow_candidate_title: "1" } },
+    });
   }
   const meetUrl = googleMeetUrl(event.hangoutLink);
   if (!meetUrl) {
@@ -229,7 +246,8 @@ async function syncSession(company: string, session: Interview, google: Google,
   const attendees = (event.attendees || []).filter(a => a.email && !a.resource)
     .map(a => ({ email: a.email!.toLowerCase(), responseStatus: a.responseStatus || "needsAction" }));
   await commit(session, {
-    sync: { status: "scheduled", meet_url: meetUrl, meet_space: space, title: event.summary,
+    sync: { status: "scheduled", meet_url: meetUrl, meet_space: space,
+      title: event.summary === calendarTitle ? session.title : event.summary ? interviewTitleFromCalendar(event.summary, candidate.data.name) : undefined,
       attendees: attendees.length ? attendees : undefined, recording_setup: setup, recording_error: setupError,
       starts_at: event.start?.dateTime, ends_at: event.end?.dateTime },
     observed: await observe(session, space, google, deadline),

@@ -1,6 +1,32 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { googleMeetUrl, interviewSchema, localDateTime, localInterviewWindow, meetingWindowOpen, recordingUrl } from "../src/lib/interviews";
+import { googleMeetUrl, interviewCalendarTitle, interviewNotificationMessage, interviewTitleFromCalendar, interviewSchema, localDateTime, localInterviewWindow, meetingWindowOpen, recordingUrl, type InterviewNotification } from "../src/lib/interviews";
+test("calendar titles include candidate names without accumulating suffixes", () => {
+  assert.equal(interviewCalendarTitle("Interview", "Alex Example"), "Interview — Alex Example");
+  assert.equal(interviewCalendarTitle("Interview — Alex Example", "alex example"), "Interview — Alex Example");
+  assert.equal(interviewCalendarTitle("Alex Example", "Alex Example"), "Alex Example");
+  assert.equal(interviewTitleFromCalendar("Technical round — Alex Example", "Alex Example"), "Technical round");
+  assert.equal(interviewTitleFromCalendar("Custom calendar title", "Alex Example"), "Custom calendar title");
+  assert.equal(interviewTitleFromCalendar("Interview — A. (Example)", "A. (Example)"), "Interview");
+  assert.equal(interviewTitleFromCalendar("X".repeat(200), "Alex"), "X".repeat(160));
+});
+test("organizer confirmations distinguish scheduling, updates and cancellation with explicit time zones", () => {
+  const session: InterviewNotification = {
+    id: crypto.randomUUID(), company_id: crypto.randomUUID(), version: 1, title: "Interview", candidate_name: "Alex Example",
+    organizer: "organizer@example.com", starts_at: "2026-09-25T03:45:00Z", ends_at: "2026-09-25T04:15:00Z",
+    timezone: "America/Toronto", status: "scheduled", meet_url: "https://meet.google.com/abc-defg-hij", organizer_notified_version: 0,
+  };
+  const scheduled = interviewNotificationMessage(session);
+  assert.equal(scheduled.subject, "Interview scheduled: Interview — Alex Example");
+  assert.match(scheduled.text, /Sep 24, 2026/);
+  assert.match(scheduled.text, /Sep 25, 2026/);
+  assert.match(scheduled.text, /Time zone: America\/Toronto/);
+  assert.match(scheduled.text, /Join Google Meet: https:\/\/meet.google.com\/abc-defg-hij/);
+  assert.match(interviewNotificationMessage({ ...session, organizer_notified_version: 1, version: 2 }).subject, /^Interview updated:/);
+  const cancelled = interviewNotificationMessage({ ...session, status: "cancelled" });
+  assert.match(cancelled.subject, /^Interview cancelled:/);
+  assert.doesNotMatch(cancelled.text, /Join Google Meet/);
+});
 test("only canonical Google Meet links are accepted", () => {
   assert.equal(googleMeetUrl("https://meet.google.com/abc-defg-hij?authuser=0"), "https://meet.google.com/abc-defg-hij");
   assert.equal(googleMeetUrl("http://meet.google.com/abc-defg-hij"), null);

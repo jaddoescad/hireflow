@@ -74,7 +74,7 @@ The core hiring workspace works without connecting external services.
 | Zapier / webhooks | Company-scoped application intake with retry deduplication | Generate an intake token in Settings; POST to `/api/webhooks/intake` |
 | Quo | Candidate call and SMS history; signed webhook updates | Configure the company's API key, phone line, and signing secrets in Settings |
 | Gmail | Read-only incoming/sent email sync and private resume attachments | Configure Google OAuth and server encryption, then connect a mailbox in Settings |
-| SMTP | Team invitation emails | Set the `SMTP_*` server environment variables |
+| SMTP | Team invitation emails and interview organizer confirmations | Set the `SMTP_*` server environment variables |
 
 See [the integration guide](docs/INTEGRATIONS.md) for payload mapping, callback URLs, secrets, and verification commands. Gmail imports messages; it does not send email. Ambiguous conversation matches remain unassigned for manual review.
 

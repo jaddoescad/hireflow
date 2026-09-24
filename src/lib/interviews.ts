@@ -24,7 +24,43 @@ export type Interview = {
   meet_url: string | null; meet_space: string | null;
   meeting_started_at: string | null; meeting_ended_at: string | null;
   last_error: string | null; synced_at: string | null; updated_by: string | null;
+  organizer_notified_version: number; organizer_notification_error: string | null;
 };
+export function interviewCalendarTitle(title: string, candidate: string) {
+  const name = candidate.trim();
+  const label = title.trim();
+  return !name || label.toLocaleLowerCase() === name.toLocaleLowerCase() ||
+    label.toLocaleLowerCase().endsWith(` — ${name.toLocaleLowerCase()}`)
+    ? label : `${label} — ${name}`;
+}
+export function interviewTitleFromCalendar(title: string, candidate: string) {
+  const suffix = ` — ${candidate.trim()}`;
+  const base = title.toLocaleLowerCase().endsWith(suffix.toLocaleLowerCase()) ? title.slice(0, -suffix.length) : title;
+  return (base.trim() || title).slice(0, 160);
+}
+export type InterviewNotification = Pick<Interview,
+  "id" | "company_id" | "version" | "title" | "organizer" | "starts_at" | "ends_at" | "timezone" | "status" | "meet_url" | "organizer_notified_version"
+> & { candidate_name: string };
+export function interviewNotificationMessage(session: InterviewNotification) {
+  const title = interviewCalendarTitle(session.title, session.candidate_name);
+  const action = session.status === "cancelled" ? "cancelled" : session.organizer_notified_version ? "updated" : "scheduled";
+  const format = new Intl.DateTimeFormat("en-CA", {
+    timeZone: session.timezone, weekday: "short", year: "numeric", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+  return {
+    subject: `Interview ${action}: ${title}`,
+    text: [
+      `Your interview has been ${action}.`, "", title,
+      `Candidate: ${session.candidate_name}`,
+      `Starts: ${format.format(new Date(session.starts_at))}`,
+      `Ends: ${format.format(new Date(session.ends_at))}`,
+      `Time zone: ${session.timezone}`, "",
+      ...(session.status !== "cancelled" && session.meet_url ? [`Join Google Meet: ${session.meet_url}`, ""] : []),
+      "This is your organizer confirmation from HireFlow. Google Calendar handles guest invitations and updates separately.",
+    ].join("\n"),
+  };
+}
 export type Recording = {
   interview_id: string; name: string; conference: string; state: string; starts_at: string | null;
   ends_at: string | null; drive_file_id: string | null; playback_url: string | null;

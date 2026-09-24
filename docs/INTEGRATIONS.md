@@ -83,6 +83,8 @@ Without this, new recordings and meeting start/end times appear within about fiv
 
 ### Behaviour
 
+- Calendar titles include the candidate name, for example `Interview — Alex Example`, in HireFlow and Google Calendar. Existing upcoming Google events gain the name on their next sync without another guest invitation.
+- Configure `SMTP_*` to send the connected organizer a separate confirmation after scheduling, edits and cancellations. It contains the candidate name, both dates/times, the scheduling time zone and the Meet link. Guest invitations still come from Google. Email failures appear in session details and retry on the scheduled sync; successful delivery is tracked per interview revision. SMTP delivery is at-least-once: a process failure after SMTP acceptance but before acknowledgement can cause a duplicate; retries keep the same Message-ID. Deployment does not send confirmations for already-synced historical revisions.
 - Each session's scheduling is synced separately from its recording setup and from each recording (in progress, processing, available). Google deletes conference records 30 days after a meeting, so HireFlow saves recording links as soon as it sees them.
 - Changes made directly in Google Calendar (time, title, cancellation) flow back into HireFlow. A HireFlow edit sends updated invitations. Google may ask guests to RSVP again after a time change; HireFlow shows Google's latest response.
 - A queued change runs only while its author and every selected interviewer are still enabled members. Outcomes that belong to an older revision are discarded.

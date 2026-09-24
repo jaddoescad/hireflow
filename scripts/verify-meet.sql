@@ -70,8 +70,40 @@ begin
   jsonb_build_object('email','meet-owner@example.com','responseStatus','accepted'),jsonb_build_object('email','meet-interviewer@example.com','responseStatus','needsAction'))))), 'commit s1';
  assert public.hf_meet_commit(ca,gen,worker,s2,1,'{"sync":{"status":"scheduled","meet_space":"spaces/two","recording_setup":"on"}}'), 'commit s2';
 
+ -- Confirmation recipients/payloads come from this company; retries do not acknowledge failed delivery.
+ rec:=public.hf_interview_notification(ca,gen,worker,s1,1);
+ assert rec->>'organizer'='interviews@example.com' and rec->>'candidate_name'='Synthetic Candidate', 'notification payload';
+ assert public.hf_interview_notification(ca,gen,worker,s1,2) is null, 'unsynced notification';
+ assert public.hf_interview_notification(ca,gen,worker,gen_random_uuid(),1) is null, 'missing notification';
+ begin perform public.hf_interview_notification(cb,gen,worker,s1,1); raise exception using errcode='HF999',message='cross-company notification';
+ exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Google connection changed', sqlerrm; end;
+ begin perform public.hf_interview_notification(ca,gen_random_uuid(),worker,s1,1); raise exception using errcode='HF999',message='stale notification worker';
+ exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Google connection changed', sqlerrm; end;
+ perform public.hf_interview_notification(ca,gen,worker,s1,1,'{"error":"Synthetic delivery failure"}');
+ select * into r from public.hf_interviews where id=s1;
+ assert r.status='scheduled' and r.organizer_notified_version=0 and r.organizer_notification_error is not null, 'mail failure changed scheduling';
+ assert public.hf_interview_notification(ca,gen,worker,s1,1) is not null, 'failed delivery not retryable';
+ perform public.hf_interview_notification(ca,gen,worker,s1,1,'{"sent":true}');
+ assert public.hf_interview_notification(ca,gen,worker,s1,1) is null, 'repeat notification';
+ select * into r from public.hf_interviews where id=s1;
+ assert r.organizer_notified_version=1 and r.organizer_notification_error is null, 'delivery not acknowledged';
+ update public.hf_members set enabled=false where company_id=ca and user_id=d;
+ update public.hf_interviews set organizer_notified_version=0 where id=s1;
+ assert public.hf_interview_notification(ca,gen,worker,s1,1) is null, 'disabled interviewer notified';
+ update public.hf_members set enabled=true where company_id=ca and user_id=d;
+ update public.hf_interviews set updated_by=d where id=s2;
+ update public.hf_members set enabled=false where company_id=ca and user_id=d;
+ assert public.hf_interview_notification(ca,gen,worker,s2,1) is null, 'disabled author notified';
+ update public.hf_members set enabled=true where company_id=ca and user_id=d;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
+ execute 'set local role authenticated';
+ begin perform public.hf_interview_notification(ca,gen,worker,s1,1); raise exception using errcode='HF999',message='client notification access';
+ exception when sqlstate 'HF999' then raise; when insufficient_privilege then null; end;
+ execute 'reset role';
+
  -- An edit keeps known RSVPs; a stale Google result cannot overwrite it, but meeting facts still save.
  perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s1,'version',1,'title','Second round','interviewer_ids',jsonb_build_array(a,d)));
+ assert public.hf_interview_notification(ca,gen,worker,s1,1,'{"sent":true}') is null, 'stale email acknowledged';
  select * into r from public.hf_interviews where id=s1;
  assert (select p->>'responseStatus' from jsonb_array_elements(r.attendees) p where p->>'email'='candidate-a@example.com')='accepted', 'rsvp kept';
  rec:=jsonb_build_object('name','conferenceRecords/qa/recordings/r1','conference','conferenceRecords/qa','state','FILE_GENERATED',
@@ -93,6 +125,11 @@ begin
  begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s2,'version',2)); raise exception using errcode='HF999',message='edited cancelled';
  exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Session is cancelled', sqlerrm; end;
  assert public.hf_meet_commit(ca,gen,worker,s2,2,'{"sync":{"status":"cancelled"}}'), 'cancel commit';
+ assert public.hf_interview_notification(ca,gen,worker,s2,2)->>'status'='cancelled', 'cancellation confirmation';
+ update public.hf_interviews set starts_at=now()-interval '5 days 1 hour',ends_at=now()-interval '5 days' where id=s2;
+ assert exists(select 1 from public.hf_meet_due(ca,'interviews@example.com','{}',10) where id=s2), 'email retry missing from due work';
+ perform public.hf_interview_notification(ca,gen,worker,s2,2,'{"sent":true}');
+ assert not exists(select 1 from public.hf_meet_due(ca,'interviews@example.com','{}',10) where id=s2), 'delivered cancellation still due';
  perform public.hf_meet_commit(ca,gen,worker,null,0,'{"release":null}');
 
  -- Organizer changes wait until the current organizer's interviews settle.
@@ -130,6 +167,6 @@ begin
  exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Google connection changed', sqlerrm; end;
  assert public.hf_meet_claim(ca)->>'state'='disconnected', 'disconnected';
  select count(*) into n from public.hf_interview_recordings where company_id=ca; assert n=1, 'history kept';
- raise notice 'PASS: Meet isolation, membership, leases, stale results, recordings, cancellation, organizer changes, past edits, disabled members and disconnect.';
+ raise notice 'PASS: Meet isolation, membership, leases, stale results, recordings, cancellation, organizer changes, past edits, disabled members, organizer notification retries and disconnect.';
 end $$;
 rollback;

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, RefreshCw, Play, ExternalLink } from "lucide-react";
 import type { Workspace } from "@/lib/types";
-import { interviewLengths, localDateTime, localInterviewWindow, type Interview, type Recording, type MeetConnection } from "@/lib/interviews";
+import { interviewCalendarTitle, interviewLengths, localDateTime, localInterviewWindow, type Interview, type Recording, type MeetConnection } from "@/lib/interviews";
 import { Field, Modal } from "./primitives";
 import "./interviews.css";
 
@@ -65,6 +65,7 @@ export function Interviews({data}: {data:Workspace}) {
         result.state==="ready"&&!result.error?"Google sync finished.":"");
     } catch(e) {setError((e as Error).message);} finally {setBusy(false);}
   }
+  const calendarTitle=(s:Interview)=>interviewCalendarTitle(s.title,data.candidates.find(c=>c.id===s.candidate_id)?.name||"");
   const session=sessions.find(s=>s.id===selected);
   const admin=data.membership?.role==="admin";
   const callback=typeof window!=="undefined"?new URLSearchParams(location.search).get("meet"):null;
@@ -104,9 +105,9 @@ export function Interviews({data}: {data:Workspace}) {
             <span className="calendar-date">{day.getDate()}</span>
             {sessions.filter(s=>dayKey(new Date(s.starts_at))===key).map(s=><div className={`calendar-event ${s.status==="cancelled"||s.cancel_requested?"cancelled":""}`} key={s.id}>
               {s.meet_url&&s.status!=="cancelled"&&!s.cancel_requested
-                ?<a href={s.meet_url} target="_blank" rel="noreferrer" title={`Join ${s.title} in Google Meet`}><span>{dateLabel(s.starts_at,{hour:"numeric",minute:"2-digit"})}</span><strong>{s.title}</strong></a>
-                :<button onClick={()=>setSelected(s.id)}><span>{dateLabel(s.starts_at,{hour:"numeric",minute:"2-digit"})}</span><strong>{s.title}</strong></button>}
-              <button className="event-details" onClick={()=>setSelected(s.id)} aria-label={`Details and recordings for ${s.title}`}>Details{recordings.some(r=>r.interview_id===s.id&&r.playback_url)?" · Recording":""}</button>
+                ?<a href={s.meet_url} target="_blank" rel="noreferrer" title={`Join ${calendarTitle(s)} in Google Meet`}><span>{dateLabel(s.starts_at,{hour:"numeric",minute:"2-digit"})}</span><strong>{calendarTitle(s)}</strong></a>
+                :<button onClick={()=>setSelected(s.id)}><span>{dateLabel(s.starts_at,{hour:"numeric",minute:"2-digit"})}</span><strong>{calendarTitle(s)}</strong></button>}
+              <button className="event-details" onClick={()=>setSelected(s.id)} aria-label={`Details and recordings for ${calendarTitle(s)}`}>Details{recordings.some(r=>r.interview_id===s.id&&r.playback_url)?" · Recording":""}</button>
             </div>)}
           </div>;
         })}
@@ -115,7 +116,7 @@ export function Interviews({data}: {data:Workspace}) {
       <h2>Sessions this month</h2>
       {!loaded?<p>Loading interviews…</p>:sessions.length===0?<div className="interview-empty"><CalendarDays size={28}/><h3>No interviews scheduled</h3><p>Choose a candidate and your interview team to get started.</p></div>:
         sessions.filter(s=>new Date(s.starts_at).getMonth()===month.getMonth()).map(s=><div className="interview-agenda-row" key={s.id}>
-          <div><strong>{s.title}</strong><small>{dateLabel(s.starts_at,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})} · {s.status==="cancelled"?"Cancelled":s.cancel_requested?"Cancelling…":s.last_error?"Needs attention":s.synced_version<s.version?"Syncing…":"Scheduled"}</small></div>
+          <div><strong>{calendarTitle(s)}</strong><small>{dateLabel(s.starts_at,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})} · {s.status==="cancelled"?"Cancelled":s.cancel_requested?"Cancelling…":s.last_error?"Needs attention":s.synced_version<s.version?"Syncing…":"Scheduled"}</small></div>
           <div>{s.meet_url&&s.status!=="cancelled"&&!s.cancel_requested&&<a href={s.meet_url} target="_blank" rel="noreferrer"><Video size={16}/> Join Meet</a>}<button onClick={()=>setSelected(s.id)}>Details & recordings</button></div>
         </div>)}
     </div>
@@ -133,12 +134,13 @@ export function Interviews({data}: {data:Workspace}) {
       </form>
     </Modal>}
     {editing!==undefined&&<InterviewEditor key={editing?.id||"new"} data={data} session={editing} onClose={()=>setEditing(undefined)} onSave={async id=>{setEditing(undefined);setSelected(id);setNotice("Session saved. Google invitations and Meet details are syncing.");await load();}}/>}
-    {session&&editing===undefined&&<Modal title={session.title} onClose={()=>setSelected(null)}>
+    {session&&editing===undefined&&<Modal title={calendarTitle(session)} onClose={()=>setSelected(null)}>
       <div className="interview-details">
         <p><strong>{data.candidates.find(c=>c.id===session.candidate_id)?.name}</strong><br/>{dateLabel(session.starts_at,{dateStyle:"full",timeStyle:"short"})} – {dateLabel(session.ends_at,{hour:"numeric",minute:"2-digit"})}<br/>{timezone}{session.timezone!==timezone?` · scheduled in ${session.timezone}`:""}</p>
         <small>Organizer: {session.organizer}</small>
         <h3>Participants</h3>
         {session.attendees.map(a=><div className="interview-attendee" key={a.email}><span>{a.email}</span><small>{a.responseStatus==="accepted"?"Accepted":a.responseStatus==="declined"?"Declined":a.responseStatus==="tentative"?"Tentative":"Awaiting response"}</small></div>)}
+        {session.organizer_notification_error&&<p className="error">{session.organizer_notification_error}</p>}
         {session.last_error&&<p className="error">{session.last_error}</p>}
         {session.meeting_started_at&&<p className="muted">{session.meeting_ended_at?`Meeting held ${dateLabel(session.meeting_started_at,{hour:"numeric",minute:"2-digit"})} – ${dateLabel(session.meeting_ended_at,{hour:"numeric",minute:"2-digit"})}`:"Meeting in progress"}</p>}
         {session.synced_version<session.version&&<p role="status">{session.cancel_requested?"Cancellation":"Session changes"} syncing with Google…</p>}
@@ -196,7 +198,7 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
     <small className="interview-timezone">{timezone}</small>
     <fieldset className="interviewer-picker"><legend>Internal interviewers</legend>{data.members.filter(m=>m.enabled).map(m=><label key={m.user_id}><input type="checkbox" checked={members.includes(m.user_id)} onChange={e=>setMembers(e.target.checked?[...members,m.user_id]:members.filter(id=>id!==m.user_id))}/><span>{m.email}</span></label>)}</fieldset>
     <label className="interview-checkbox"><input type="checkbox" name="auto_record" defaultChecked={session?.auto_record??true}/> Automatically record this interview</label>
-    <p className="muted">Requires eligible Google Workspace recording access. Google notifies participants when recording starts. Invitations and changes are emailed to the candidate and selected interviewers.</p>
+    <p className="muted">Requires eligible Google Workspace recording access. Google notifies participants when recording starts. Google emails invitations and changes to guests. HireFlow also emails a confirmation to the connected organizer.</p>
     {error&&<p className="error" role="alert">{error}</p>}
     <footer className="form-actions"><button type="button" onClick={onClose}>Back</button><button className="primary" disabled={busy||members.length===0}>{busy?"Saving…":session?"Save & notify guests":"Schedule & send invitations"}</button></footer>
   </form></Modal>;
