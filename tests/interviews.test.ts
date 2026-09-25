@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { googleMeetUrl, interviewCalendarTitle, interviewNotificationMessage, interviewTitleFromCalendar, interviewSchema, localDateTime, localInterviewWindow, meetingWindowOpen, recordingPreviewUrl, recordingUrl, type InterviewNotification } from "../src/lib/interviews";
+import { googleMeetUrl, interviewCalendarTitle, interviewNotificationMessage, interviewTitleFromCalendar, interviewSchema, localDateTime, localInterviewWindow, meetingWindowOpen, recordingPreviewUrl, recordingThumbnailUrl, recordingUrl, type InterviewNotification } from "../src/lib/interviews";
 test("calendar titles include candidate names without accumulating suffixes", () => {
   assert.equal(interviewCalendarTitle("Interview", "Alex Example"), "Interview — Alex Example");
   assert.equal(interviewCalendarTitle("Interview — Alex Example", "alex example"), "Interview — Alex Example");
@@ -40,6 +40,8 @@ test("recording playback prefers Google's export link and rejects other hosts", 
   assert.equal(recordingUrl(undefined, undefined), null);
   assert.equal(recordingPreviewUrl("file_1"), "https://drive.google.com/file/d/file_1/preview");
   assert.equal(recordingPreviewUrl("../bad"), null);
+  assert.equal(recordingThumbnailUrl("file_1"), "https://lh3.googleusercontent.com/d/file_1=w640");
+  assert.equal(recordingThumbnailUrl("bad/id"), null);
 });
 test("meeting facts are checked from 15 minutes before the start", () => {
   const starts_at = "2026-09-22T15:00:00.000Z";

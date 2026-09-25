@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, LoaderCircle, Play, Search, Video } from "lucide-react";
 import type { Candidate, Workspace } from "@/lib/types";
-import { recordingPreviewUrl, type Recording } from "@/lib/interviews";
+import { recordingPreviewUrl, recordingThumbnailUrl, type Recording } from "@/lib/interviews";
 import { Modal } from "./primitives";
 import "./recordings.css";
 
@@ -40,8 +40,10 @@ function RecordingGrid({ data, rows, onCandidate }: { data: Workspace; rows: Row
         const candidate = data.candidates.find(c => c.id === r.interview.candidate_id);
         const length = minutes(r);
         const ready = !!r.playback_url;
+        const thumbnail = ready ? recordingThumbnailUrl(r.drive_file_id) : null;
         return <article className="recording-card" key={r.name}>
           <button className="recording-thumb" disabled={!ready} onClick={() => setPlaying(r)} aria-label={`Play ${r.interview.title}${candidate ? ` with ${candidate.name}` : ""}`}>
+            {thumbnail && <img src={thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => e.currentTarget.remove()} />}
             {ready ? <span className="recording-play"><Play size={22} fill="currentColor" /></span> : <span className="recording-pending"><LoaderCircle size={18} className="spin" />{stateLabel(r)}</span>}
             {length && <span className="recording-length">{length} min</span>}
           </button>
