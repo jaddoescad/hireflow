@@ -377,7 +377,7 @@ export function Metrics({
                 <strong>{activity ? format.format(activity.answered) : "…"}</strong>
                 <small>
                   {activity
-                    ? `${percent(activity.answered, activity.called)} of called candidates picked up`
+                    ? `${percent(activity.answered, activity.called)} of called candidates talked for 30+ seconds`
                     : "Loading"}
                 </small>
               </section>
@@ -451,9 +451,11 @@ export function Metrics({
             )}
             <p className="metrics-caption">
               Counts candidates, not attempts: calling the same person three
-              times counts once. Calls, texts and emails come from Quo and Gmail
-              and use your local time; new candidates follow the date basis
-              above.
+              times counts once. A call counts as answered when it stayed
+              connected for at least 30 seconds, because Quo also reports
+              voicemail pickups as answered. Calls, texts and emails come from
+              Quo and Gmail and use your local time; new candidates follow the
+              date basis above.
             </p>
           </>
         )}
