@@ -47,4 +47,20 @@
   .interview-agenda {
     margin-top: 12px;
   }
+  .interviews-heading {
+    margin-bottom: 12px;
+  }
+  .interviews-heading p,
+  .interview-connection small {
+    display: none;
+  }
+  .interview-connection {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 12px;
+    margin: 12px 0;
+  }
+  .interview-connection strong {
+    overflow-wrap: anywhere;
+  }
 }

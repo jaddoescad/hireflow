@@ -1335,6 +1335,7 @@ pre {
     flex-direction: column;
   }
   .sidebar {
+    flex: none;
     width: 100%;
     height: auto;
     padding: 12px 16px;
