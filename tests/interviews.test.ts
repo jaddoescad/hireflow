@@ -48,10 +48,12 @@ test("meeting facts are checked from 15 minutes before the start", () => {
   assert.equal(meetingWindowOpen({ starts_at }, Date.parse("2026-09-22T14:44:00.000Z")), false);
   assert.equal(meetingWindowOpen({ starts_at }, Date.parse("2026-09-22T14:46:00.000Z")), true);
 });
-test("interviews need a bounded duration and at least one interviewer", () => {
+test("interviews need a bounded duration, an interviewer and a candidate email", () => {
   const base = { id: crypto.randomUUID(), candidate_id: crypto.randomUUID(), title: "Interview", timezone: "America/Toronto",
-    starts_at: "2026-09-22T15:00:00.000Z", ends_at: "2026-09-22T15:30:00.000Z", interviewer_ids: [crypto.randomUUID()], auto_record: true };
+    starts_at: "2026-09-22T15:00:00.000Z", ends_at: "2026-09-22T15:30:00.000Z", interviewer_ids: [crypto.randomUUID()], auto_record: true, candidate_email: " Alex@Example.com " };
   assert.equal(interviewSchema.parse(base).version, 0);
+  assert.equal(interviewSchema.parse(base).candidate_email, "alex@example.com");
+  assert.throws(() => interviewSchema.parse({ ...base, candidate_email: "not-an-email" }));
   assert.throws(() => interviewSchema.parse({ ...base, ends_at: base.starts_at }));
   assert.throws(() => interviewSchema.parse({ ...base, ends_at: "2026-09-23T04:00:00.000Z" }));
   assert.throws(() => interviewSchema.parse({ ...base, interviewer_ids: [] }));

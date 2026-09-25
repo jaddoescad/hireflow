@@ -209,12 +209,14 @@ export function CandidateDetail({
   mutate,
   onClose,
   onEdit,
+  onRefresh,
 }: {
   candidate: Candidate;
   data: Workspace;
   mutate: Mutate;
   onClose: () => void;
   onEdit: () => void;
+  onRefresh: () => void;
 }) {
   const [tab, setTab] = useState("chat");
   const [scheduling, setScheduling] = useState(false);
@@ -359,12 +361,6 @@ export function CandidateDetail({
           </select>
           <button
             className="primary"
-            disabled={!c.email}
-            title={
-              c.email
-                ? undefined
-                : "Add an email address to invite this candidate"
-            }
             onClick={() => {
               setScheduled(false);
               setScheduling(true);
@@ -573,6 +569,7 @@ export function CandidateDetail({
           onSave={() => {
             setScheduling(false);
             setScheduled(true);
+            onRefresh();
           }}
         />
       )}

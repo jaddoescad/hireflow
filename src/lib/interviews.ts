@@ -9,6 +9,8 @@ export const interviewSchema = z.object({
   }, "Choose a valid timezone."),
   interviewer_ids: z.array(z.uuid()).min(1).max(30),
   auto_record: z.boolean(),
+  // Saved on the candidate record so invitations and email matching use the corrected address.
+  candidate_email: z.string().trim().toLowerCase().email("Enter a valid candidate email.").max(254),
 }).refine(value => {
   const duration = Date.parse(value.ends_at) - Date.parse(value.starts_at);
   return duration > 0 && duration <= 12 * 60 * 60 * 1000;

@@ -516,7 +516,7 @@ export function Workspace() {
             }}
           />
         ) : view === "calendar" ? (
-          <Interviews key={data.company.id} data={data} />
+          <Interviews key={data.company.id} data={data} onRefresh={() => void load()} />
         ) : view === "recordings" ? (
           <Recordings key={data.company.id} data={data} onCandidate={(c) => setSelected(c.id)} />
         ) : view === "metrics" ? (
@@ -596,6 +596,7 @@ export function Workspace() {
           mutate={mutate}
           onClose={() => setSelected(null)}
           onEdit={() => setEdit(c)}
+          onRefresh={() => void load()}
         />
       )}
       {edit !== undefined && (

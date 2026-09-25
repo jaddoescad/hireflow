@@ -4,7 +4,7 @@ begin;
 do $$
 declare
  a uuid:=gen_random_uuid(); b uuid:=gen_random_uuid(); d uuid:=gen_random_uuid();
- ca uuid; cb uuid; ka uuid; kb uuid; s1 uuid:=gen_random_uuid(); s2 uuid:=gen_random_uuid();
+ ca uuid; cb uuid; ka uuid; kb uuid; s1 uuid:=gen_random_uuid(); s2 uuid:=gen_random_uuid(); s3 uuid:=gen_random_uuid();
  lease jsonb; gen uuid; worker uuid; n integer; v integer; r record; rec jsonb;
  future timestamptz:=now()+interval '1 day';
  base jsonb;
@@ -39,6 +39,20 @@ begin
  exception when sqlstate 'HF999' then raise; when others then assert sqlerrm like '%future%', sqlerrm; end;
  select * into r from public.hf_interviews where id=s1;
  assert r.organizer='interviews@example.com' and jsonb_array_length(r.attendees)=3, 'organizer or attendees';
+ -- The scheduler can correct the candidate email; it updates only this company's candidate and the invitation.
+ perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s3,'candidate_email',' Corrected@Example.com '));
+ assert (select email from public.hf_candidates where id=ka)='corrected@example.com', 'candidate email not corrected';
+ assert exists(select 1 from public.hf_interviews i, jsonb_array_elements(i.attendees) p where i.id=s3 and p->>'email'='corrected@example.com')
+  and not exists(select 1 from public.hf_interviews i, jsonb_array_elements(i.attendees) p where i.id=s3 and p->>'email'='candidate-a@example.com'), 'invitation email';
+ begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',gen_random_uuid(),'candidate_email','not-an-email'));
+  raise exception using errcode='HF999',message='invalid email saved';
+ exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Enter a valid candidate email', sqlerrm; end;
+ begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',gen_random_uuid(),'candidate_id',kb,'candidate_email','hijack@example.com'));
+  raise exception using errcode='HF999',message='other company candidate edited';
+ exception when sqlstate 'HF999' then raise; when others then assert sqlerrm like 'Choose a candidate%', sqlerrm; end;
+ assert (select email from public.hf_candidates where id=kb)='candidate-b@example.com', 'other company email changed';
+ delete from public.hf_interviews where id=s3;
+ update public.hf_candidates set email='candidate-a@example.com' where id=ka;
 
  -- Browser reads are limited to enabled members; connection credentials are never readable.
  perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);

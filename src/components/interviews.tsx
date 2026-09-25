@@ -16,7 +16,7 @@ async function json(url: string, body?: unknown) {
 function dateLabel(iso:string, options:Intl.DateTimeFormatOptions) {return new Date(iso).toLocaleString(undefined,options);}
 function dayKey(date:Date) {return localDateTime(date.toISOString()).slice(0,10);}
 
-export function Interviews({data}: {data:Workspace}) {
+export function Interviews({data,onRefresh}: {data:Workspace;onRefresh:()=>void}) {
   const cid=data.company!.id;
   const [month,setMonth]=useState(()=>new Date(new Date().getFullYear(),new Date().getMonth(),1));
   const [sessions,setSessions]=useState<Interview[]>([]);
@@ -115,7 +115,7 @@ export function Interviews({data}: {data:Workspace}) {
           <div>{s.meet_url&&s.status!=="cancelled"&&!s.cancel_requested&&<a href={s.meet_url} target="_blank" rel="noreferrer"><Video size={16}/> Join Meet</a>}<button onClick={()=>setSelected(s.id)}>Details & recordings</button></div>
         </div>)}
     </div>
-    {editing!==undefined&&<InterviewEditor key={editing?.id||"new"} data={data} session={editing} onClose={()=>setEditing(undefined)} onSave={async id=>{setEditing(undefined);setSelected(id);setNotice("Session saved. Google invitations and Meet details are syncing.");await load();}}/>}
+    {editing!==undefined&&<InterviewEditor key={editing?.id||"new"} data={data} session={editing} onClose={()=>setEditing(undefined)} onSave={async id=>{setEditing(undefined);setSelected(id);setNotice("Session saved. Google invitations and Meet details are syncing.");onRefresh();await load();}}/>}
     {session&&editing===undefined&&<Modal title={calendarTitle(session)} onClose={()=>setSelected(null)}>
       <div className="interview-details">
         <p><strong>{data.candidates.find(c=>c.id===session.candidate_id)?.name}</strong><br/>{dateLabel(session.starts_at,{dateStyle:"full",timeStyle:"short"})} – {dateLabel(session.ends_at,{hour:"numeric",minute:"2-digit"})}<br/>{timezone}{session.timezone!==timezone?` · scheduled in ${session.timezone}`:""}</p>
@@ -153,6 +153,7 @@ export function Interviews({data}: {data:Workspace}) {
 export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:Workspace;session:Interview|null;candidateId?:string;onClose:()=>void;onSave:(id:string)=>void|Promise<void>}) {
   const [id]=useState(()=>session?.id||crypto.randomUUID());
   const [candidate,setCandidate]=useState(session?.candidate_id||candidateId||"");
+  const [email,setEmail]=useState(()=>data.candidates.find(c=>c.id===(session?.candidate_id||candidateId))?.email||"");
   const [members,setMembers]=useState(session?.interviewer_ids||[data.user.id]);
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
   const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -166,14 +167,16 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
       const result=await json("/api/interviews",{company_id:data.company!.id,payload:{
         id,version:session?.version||0,candidate_id:candidate,title:form.get("title"),
         ...window,
-        timezone,interviewer_ids:members,auto_record:form.get("auto_record")==="on",
+        timezone,interviewer_ids:members,auto_record:form.get("auto_record")==="on",candidate_email:email,
       }});
       await onSave(result.id);
     }catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }}>
-    <Field label="Candidate"><select value={candidate} required onChange={e=>setCandidate(e.target.value)}>
-      <option value="">Choose a candidate</option>{data.candidates.filter(c=>c.email).map(c=><option key={c.id} value={c.id}>{c.name}{c.job_title?` · ${c.job_title}`:""}</option>)}
+    <Field label="Candidate"><select value={candidate} required onChange={e=>{setCandidate(e.target.value);setEmail(data.candidates.find(c=>c.id===e.target.value)?.email||"");}}>
+      <option value="">Choose a candidate</option>{data.candidates.map(c=><option key={c.id} value={c.id}>{c.name}{c.job_title?` · ${c.job_title}`:""}</option>)}
     </select></Field>
+    <Field label="Candidate email"><input type="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></Field>
+    {candidate&&email.trim().toLowerCase()!==(data.candidates.find(c=>c.id===candidate)?.email||"")&&<small className="interview-timezone">The invitation goes to this address, and it replaces the email on the candidate&apos;s profile.</small>}
     <Field label="Session title"><input name="title" required maxLength={160} defaultValue={session?.title||"Interview"}/></Field>
     <div className="interview-time-grid"><Field label="Date"><input type="date" name="date" required defaultValue={startLocal.slice(0,10)}/></Field>
       <Field label="Start"><input type="time" name="start_time" required defaultValue={startLocal.slice(11)}/></Field>
