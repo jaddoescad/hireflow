@@ -15,6 +15,7 @@ import type { Mutate } from "./hiring-board";
 import { Field, Modal, when, Empty } from "./primitives";
 import { InterviewScorecard } from "./interview-scorecard";
 import { InterviewEditor } from "./interviews";
+import { CandidateRecordings } from "./recordings";
 const experienceLevels = [
   "Less than 1 year",
   "1-2 years",
@@ -391,7 +392,7 @@ export function CandidateDetail({
         )}
       </div>
       <div className="tabs" role="tablist">
-        {["chat", "notes", "scores", "details"].map((t) => (
+        {["chat", "notes", "scores", "recordings", "details"].map((t) => (
           <button
             key={t}
             role="tab"
@@ -412,7 +413,9 @@ export function CandidateDetail({
           onDirtyChange={setScoresDirty}
         />
       </div>
-      {tab === "scores" ? null : tab === "details" ? (
+      {tab === "scores" ? null : tab === "recordings" ? (
+        <CandidateRecordings data={data} candidateId={c.id} />
+      ) : tab === "details" ? (
         <dl className="details-list">
           <dt>Source</dt>
           <dd>{c.source}</dd>

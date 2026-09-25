@@ -508,7 +508,7 @@ export function Workspace() {
         ) : view === "calendar" ? (
           <Interviews key={data.company.id} data={data} />
         ) : view === "recordings" ? (
-          <Recordings key={data.company.id} data={data} />
+          <Recordings key={data.company.id} data={data} onCandidate={(c) => setSelected(c.id)} />
         ) : view === "metrics" ? (
           <Metrics key={data.company.id} data={data} onCandidate={(c) => setSelected(c.id)} />
         ) : view === "team" ? (

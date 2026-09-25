@@ -87,6 +87,10 @@ export function recordingUrl(exportUri: string | undefined, fileId: string | und
   return fileId && /^[a-zA-Z0-9_-]+$/.test(fileId)
     ? `https://drive.google.com/file/d/${fileId}/view` : null;
 }
+// Drive's embeddable player; it plays only for Google accounts that can open the file.
+export function recordingPreviewUrl(fileId: string | null | undefined) {
+  return fileId && /^[a-zA-Z0-9_-]+$/.test(fileId) ? `https://drive.google.com/file/d/${fileId}/preview` : null;
+}
 // Joins in the 15 minutes before the start still belong to the interview.
 export function meetingWindowOpen(session: Pick<Interview, "starts_at">, now = Date.now()) {
   return Date.parse(session.starts_at) - 15 * 60000 <= now;
