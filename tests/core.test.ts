@@ -151,3 +151,32 @@ test("Hiring Sheet import keeps answers and stable identity across row sorting",
   assert.equal(reviewed.attributes["Original phone (needs review)"], "not supplied");
   assert.ok(reviewed.tags.includes("Phone needs review"));
 });
+test("Quo calls record whether someone answered", () => {
+  const call = (answeredAt?: string | null) =>
+    parseQuoEvent(
+      {
+        id: "e",
+        type: "call.completed",
+        data: {
+          object: {
+            id: "c",
+            phoneNumberId: "PNtest",
+            direction: "outgoing",
+            from: "+13433265133",
+            to: "+16135550123",
+            status: "completed",
+            createdAt: "2026-09-15T12:00:00Z",
+            ...(answeredAt === undefined ? {} : { answeredAt }),
+          },
+        },
+      },
+      "PNtest",
+      "+13433265133",
+    );
+  assert.equal(call("2026-09-15T12:00:05Z")?.metadata.answered_at, "2026-09-15T12:00:05Z");
+  assert.equal(call("2026-09-15T12:00:05Z")?.body, "Outgoing call · answered");
+  assert.equal(call(null)?.metadata.answered_at, null);
+  assert.equal(call(null)?.body, "Outgoing call · no answer");
+  // Older payloads without the field stay unknown instead of counting as unanswered.
+  assert.equal("answered_at" in call()!.metadata, false);
+});

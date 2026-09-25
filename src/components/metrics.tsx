@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, RotateCcw } from "lucide-react";
 import type { Candidate, Workspace } from "@/lib/types";
 import {
@@ -17,6 +17,48 @@ import {
 import "./metrics.css";
 
 const format = new Intl.NumberFormat("en-CA");
+const localDay = (date: Date) => date.toLocaleDateString("en-CA");
+type Activity = {
+  calls: number;
+  answered_calls: number;
+  unknown_calls: number;
+  called: number;
+  answered: number;
+  messages: number;
+  messaged: number;
+  days: { day: string; called: number; answered: number; messaged: number; calls: number }[];
+  contacted: string[];
+};
+// Team outreach in the viewer's time zone, for the selected date range.
+function useActivity(company: string, from: string, to: string) {
+  const [activity, setActivity] = useState<Activity | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (from && to && from > to) return;
+    let live = true;
+    const params = new URLSearchParams({
+      company,
+      from,
+      to,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    setActivity(null);
+    setError("");
+    fetch(`/api/metrics/activity?${params}`, { cache: "no-store" })
+      .then(async (r) => {
+        const value = await r.json();
+        if (!r.ok) throw new Error(value.error || "Could not load team activity.");
+        if (live) setActivity(value);
+      })
+      .catch((e) => {
+        if (live) setError((e as Error).message);
+      });
+    return () => {
+      live = false;
+    };
+  }, [company, from, to]);
+  return { activity, error };
+}
 const shortDate = (day: string) =>
   new Date(day + "T00:00:00Z").toLocaleDateString("en-CA", {
     month: "short",
@@ -87,6 +129,7 @@ export function Metrics({
 }) {
   const [filters, setFilters] = useState<MetricsFilters>({ ...EMPTY_FILTERS });
   const [page, setPage] = useState(0);
+  const [uncontactedOnly, setUncontactedOnly] = useState(false);
   const company = data.company!.id;
   const candidates = useMemo(
     () => data.candidates.filter((c) => c.company_id === company),
@@ -105,6 +148,31 @@ export function Metrics({
     () => filterCandidates(candidates, company, filters),
     [candidates, company, filters],
   );
+  const { activity, error: activityError } = useActivity(
+    company,
+    filters.from,
+    filters.to,
+  );
+  const contacted = useMemo(
+    () => new Set(activity?.contacted),
+    [activity],
+  );
+  const uncontacted = activity
+    ? filtered.filter((c) => !contacted.has(c.id))
+    : [];
+  const listed = uncontactedOnly && activity ? uncontacted : filtered;
+  const newByDay = new Map<string, number>();
+  for (const c of filtered) {
+    const day = candidateDay(c, filters.dateBasis);
+    if (day) newByDay.set(day, (newByDay.get(day) || 0) + 1);
+  }
+  const activityDays = new Map(activity?.days.map((d) => [d.day, d]));
+  const dailyRows = [...new Set([...newByDay.keys(), ...activityDays.keys()])]
+    .filter((d) => (!filters.from || d >= filters.from) && (!filters.to || d <= filters.to))
+    .sort()
+    .reverse();
+  const percent = (part: number, whole: number) =>
+    whole ? `${Math.round((part / whole) * 100)}%` : "0%";
   const unique = uniqueContacts(filtered);
   const stages = stageBreakdown(filtered, data.stages, company);
   const hired = stages
@@ -139,9 +207,9 @@ export function Metrics({
   );
   const options = (get: (c: Candidate) => unknown) =>
     [...new Set(candidates.map((c) => label(get(c))))].sort();
-  const pages = Math.max(1, Math.ceil(filtered.length / 20));
+  const pages = Math.max(1, Math.ceil(listed.length / 20));
   const safePage = Math.min(page, pages - 1);
-  const sorted = [...filtered].sort(
+  const sorted = [...listed].sort(
     (a, b) =>
       (candidateDay(b, filters.dateBasis) || "").localeCompare(
         candidateDay(a, filters.dateBasis) || "",
@@ -152,11 +220,11 @@ export function Metrics({
   );
   const preset = (days: number | null) => {
     const today = new Date();
-    const to = today.toISOString().slice(0, 10);
-    today.setUTCDate(today.getUTCDate() - ((days || 1) - 1));
+    const to = localDay(today);
+    today.setDate(today.getDate() - ((days || 1) - 1));
     setFilters((f) => ({
       ...f,
-      from: days ? today.toISOString().slice(0, 10) : "",
+      from: days ? localDay(today) : "",
       to: days ? to : "",
     }));
     setPage(0);
@@ -166,7 +234,7 @@ export function Metrics({
       <header className="metrics-heading">
         <div>
           <h1>Hiring metrics</h1>
-          <p>Lead volume, candidate experience, and your current pipeline.</p>
+          <p>Team outreach, lead volume, and your current pipeline.</p>
         </div>
         {hasFilters && (
           <button
@@ -183,6 +251,7 @@ export function Metrics({
         <div className="metrics-periods">
           <span>Date range</span>
           {[
+            [1, "Today"],
             [7, "7 days"],
             [30, "30 days"],
             [90, "90 days"],
@@ -272,6 +341,122 @@ export function Metrics({
           {unknownDates > 0 &&
             ` ${unknownDates} records have no valid date and are excluded when a date filter is set.`}
         </p>
+      </section>
+      <section className="metrics-panel metrics-activity-panel" aria-live="polite">
+        <div className="metrics-panel-heading">
+          <h2>Team activity</h2>
+          <span>
+            {filters.from || filters.to
+              ? `${filters.from || "Start"} to ${filters.to || "today"}`
+              : "All time"}
+          </span>
+        </div>
+        {activityError ? (
+          <p className="error" role="alert">
+            {activityError}
+          </p>
+        ) : (
+          <>
+            <div className="metrics-activity">
+              <section className="metrics-stat">
+                <span>New candidates</span>
+                <strong>{format.format(filtered.length)}</strong>
+                <small>Applications received in this range</small>
+              </section>
+              <section className="metrics-stat">
+                <span>Called</span>
+                <strong>{activity ? format.format(activity.called) : "…"}</strong>
+                <small>
+                  {activity
+                    ? `${format.format(activity.calls)} outgoing call${activity.calls === 1 ? "" : "s"}`
+                    : "Loading"}
+                </small>
+              </section>
+              <section className="metrics-stat">
+                <span>Answered</span>
+                <strong>{activity ? format.format(activity.answered) : "…"}</strong>
+                <small>
+                  {activity
+                    ? `${percent(activity.answered, activity.called)} of called candidates picked up`
+                    : "Loading"}
+                </small>
+              </section>
+              <section className="metrics-stat">
+                <span>Messaged</span>
+                <strong>{activity ? format.format(activity.messaged) : "…"}</strong>
+                <small>
+                  {activity
+                    ? `${format.format(activity.messages)} text${activity.messages === 1 ? "" : "s"} and emails sent`
+                    : "Loading"}
+                </small>
+              </section>
+              <button
+                className={`metrics-stat metrics-stat-action ${uncontactedOnly ? "active" : ""}`}
+                disabled={!activity}
+                aria-pressed={uncontactedOnly}
+                onClick={() => {
+                  setUncontactedOnly(!uncontactedOnly);
+                  setPage(0);
+                }}
+              >
+                <span>Not contacted yet</span>
+                <strong>{activity ? format.format(uncontacted.length) : "…"}</strong>
+                <small>
+                  {uncontactedOnly
+                    ? "Showing them below · click to show all"
+                    : "New candidates with no call, text or email · click to list"}
+                </small>
+              </button>
+            </div>
+            {!!activity?.unknown_calls && (
+              <p className="metrics-caption">
+                {format.format(activity.unknown_calls)} older call
+                {activity.unknown_calls === 1 ? " was" : "s were"} saved before
+                HireFlow recorded whether it was answered, so{" "}
+                {activity.unknown_calls === 1 ? "it isn't" : "they aren't"}{" "}
+                counted as answered.
+              </p>
+            )}
+            {dailyRows.length > 0 && (
+              <details className="metrics-volume-table" open={dailyRows.length <= 14}>
+                <summary>Day by day</summary>
+                <div className="metrics-table-scroll metrics-daily">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Day</th>
+                        <th>New candidates</th>
+                        <th>Called</th>
+                        <th>Answered</th>
+                        <th>Messaged</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailyRows.map((day) => {
+                        const d = activityDays.get(day);
+                        return (
+                          <tr key={day}>
+                            <td>{shortDate(day)}</td>
+                            <td>{newByDay.get(day) || 0}</td>
+                            <td>{d?.called || 0}</td>
+                            <td>{d?.answered || 0}</td>
+                            <td>{d?.messaged || 0}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )}
+            <p className="metrics-caption">
+              Counts candidates, not attempts: calling the same person three
+              times counts once. Calls, texts and emails come from Quo and Gmail
+              and use your local time; new candidates follow the date basis
+              above.
+            </p>
+          </>
+        )}
       </section>
       <div className="metrics-summary" aria-live="polite">
         {[
@@ -396,10 +581,10 @@ export function Metrics({
       </div>
       <section className="metrics-panel">
         <div className="metrics-panel-heading">
-          <h2>Matching applications</h2>
-          <span>{format.format(filtered.length)} records</span>
+          <h2>{uncontactedOnly && activity ? "Not contacted yet" : "Matching applications"}</h2>
+          <span>{format.format(listed.length)} records</span>
         </div>
-        {filtered.length ? (
+        {listed.length ? (
           <>
             <div className="metrics-table-scroll">
               <table>

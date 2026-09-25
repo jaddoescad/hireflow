@@ -17,6 +17,7 @@ const event = z.object({
       duration: z.number().optional(),
       createdAt: z.string(),
       completedAt: z.string().nullable().optional(),
+      answeredAt: z.string().nullable().optional(),
     }),
   }),
 });
@@ -52,6 +53,15 @@ export function parseQuoEvent(
   ];
   if (peers.length !== 1) return null;
   const occurred_at = obj.completedAt || obj.createdAt;
+  // Quo marks every finished call "completed"; only answeredAt says whether someone picked up.
+  const answer =
+    kind === "call" && obj.answeredAt !== undefined
+      ? obj.answeredAt
+        ? "answered"
+        : obj.direction === "incoming"
+          ? "missed"
+          : "no answer"
+      : obj.status;
   if (!Number.isFinite(Date.parse(occurred_at)))
     throw new Error("Invalid event timestamp");
   return {
@@ -62,9 +72,16 @@ export function parseQuoEvent(
     body:
       kind === "sms"
         ? obj.body || obj.text || "Attachment"
-        : `${obj.direction === "incoming" ? "Incoming" : "Outgoing"} call${obj.status ? ` · ${obj.status}` : ""}${obj.duration ? ` · ${obj.duration}s` : ""}`,
+        : `${obj.direction === "incoming" ? "Incoming" : "Outgoing"} call${answer ? ` · ${answer}` : ""}${obj.duration ? ` · ${obj.duration}s` : ""}`,
     external_id: `quo:${kind}:${obj.id}`,
     occurred_at,
-    metadata: { status: obj.status, duration: obj.duration, quo_id: obj.id },
+    metadata: {
+      status: obj.status,
+      duration: obj.duration,
+      quo_id: obj.id,
+      ...(kind === "call" && obj.answeredAt !== undefined
+        ? { answered_at: obj.answeredAt }
+        : {}),
+    },
   };
 }
