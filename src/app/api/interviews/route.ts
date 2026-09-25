@@ -33,6 +33,8 @@ export async function POST(request:Request) {
       ? z.object({id:z.uuid(),version:z.number().int().positive(),cancel:z.literal(true)}).parse(body.payload)
       : interviewSchema.parse(body.payload);
     const {data:id,error}=await adminDb().rpc("hf_interview_save",{actor:user.id,cid:company,payload});
+    if(error?.message==="Candidate already has an upcoming interview")
+      return NextResponse.json({error:error.message,duplicate_at:error.details},{status:409});
     if(error) throw new Error(error.message);
     // Wait out a running sync briefly; the saved change stays queued for the scheduled sync either way.
     after(async()=>{

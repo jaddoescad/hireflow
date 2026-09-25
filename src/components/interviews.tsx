@@ -10,7 +10,7 @@ import "./interviews.css";
 async function json(url: string, body?: unknown) {
   const response = await fetch(url, body ? {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)} : {cache:"no-store"});
   const value = await response.json();
-  if(!response.ok) throw new Error(value.error || "Request failed.");
+  if(!response.ok) throw Object.assign(new Error(value.error || "Request failed."), value);
   return value;
 }
 function dateLabel(iso:string, options:Intl.DateTimeFormatOptions) {return new Date(iso).toLocaleString(undefined,options);}
@@ -156,6 +156,7 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
   const [email,setEmail]=useState(()=>data.candidates.find(c=>c.id===(session?.candidate_id||candidateId))?.email||"");
   const [members,setMembers]=useState(session?.interviewer_ids||[data.user.id]);
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
+  const [duplicate,setDuplicate]=useState<string|null>(null);
   const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
   const startLocal=session?localDateTime(session.starts_at):"";
   const length=session?Math.round((Date.parse(session.ends_at)-Date.parse(session.starts_at))/60000):30;
@@ -168,11 +169,15 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
         id,version:session?.version||0,candidate_id:candidate,title:form.get("title"),
         ...window,
         timezone,interviewer_ids:members,auto_record:form.get("auto_record")==="on",candidate_email:email,
+        allow_another:!!duplicate,
       }});
       await onSave(result.id);
-    }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+    }catch(e){
+      const at=(e as {duplicate_at?:string}).duplicate_at;
+      if(at) setDuplicate(at); else setError((e as Error).message);
+    }finally{setBusy(false);}
   }}>
-    <Field label="Candidate"><select value={candidate} required onChange={e=>{setCandidate(e.target.value);setEmail(data.candidates.find(c=>c.id===e.target.value)?.email||"");}}>
+    <Field label="Candidate"><select value={candidate} required onChange={e=>{setCandidate(e.target.value);setEmail(data.candidates.find(c=>c.id===e.target.value)?.email||"");setDuplicate(null);}}>
       <option value="">Choose a candidate</option>{data.candidates.map(c=><option key={c.id} value={c.id}>{c.name}{c.job_title?` · ${c.job_title}`:""}</option>)}
     </select></Field>
     <Field label="Candidate email"><input type="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></Field>
@@ -186,6 +191,7 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
     <label className="interview-checkbox"><input type="checkbox" name="auto_record" defaultChecked={session?.auto_record??true}/> Automatically record this interview</label>
     <p className="muted">Requires eligible Google Workspace recording access. Google notifies participants when recording starts. Google emails invitations and changes to guests. HireFlow also emails a confirmation to the connected organizer.</p>
     {error&&<p className="error" role="alert">{error}</p>}
-    <footer className="form-actions"><button type="button" onClick={onClose}>Back</button><button className="primary" disabled={busy||members.length===0}>{busy?"Saving…":session?"Save & notify guests":"Schedule & send invitations"}</button></footer>
+    {duplicate&&<p className="error" role="alert">{data.candidates.find(c=>c.id===candidate)?.name||"This candidate"} already has an interview {new Date(duplicate).toLocaleString(undefined,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}. Check the Calendar before booking again, or schedule another if this is a new round.</p>}
+    <footer className="form-actions"><button type="button" onClick={onClose}>Back</button><button className="primary" disabled={busy||members.length===0}>{busy?"Saving…":duplicate?"Schedule another anyway":session?"Save & notify guests":"Schedule & send invitations"}</button></footer>
   </form></Modal>;
 }

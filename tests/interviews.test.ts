@@ -53,6 +53,7 @@ test("interviews need a bounded duration, an interviewer and a candidate email",
     starts_at: "2026-09-22T15:00:00.000Z", ends_at: "2026-09-22T15:30:00.000Z", interviewer_ids: [crypto.randomUUID()], auto_record: true, candidate_email: " Alex@Example.com " };
   assert.equal(interviewSchema.parse(base).version, 0);
   assert.equal(interviewSchema.parse(base).candidate_email, "alex@example.com");
+  assert.equal(interviewSchema.parse(base).allow_another, false);
   assert.throws(() => interviewSchema.parse({ ...base, candidate_email: "not-an-email" }));
   assert.throws(() => interviewSchema.parse({ ...base, ends_at: base.starts_at }));
   assert.throws(() => interviewSchema.parse({ ...base, ends_at: "2026-09-23T04:00:00.000Z" }));

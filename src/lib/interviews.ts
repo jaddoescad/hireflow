@@ -11,6 +11,7 @@ export const interviewSchema = z.object({
   auto_record: z.boolean(),
   // Saved on the candidate record so invitations and email matching use the corrected address.
   candidate_email: z.string().trim().toLowerCase().email("Enter a valid candidate email.").max(254),
+  allow_another: z.boolean().default(false),
 }).refine(value => {
   const duration = Date.parse(value.ends_at) - Date.parse(value.starts_at);
   return duration > 0 && duration <= 12 * 60 * 60 * 1000;

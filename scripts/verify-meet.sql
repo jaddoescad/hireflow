@@ -40,11 +40,11 @@ begin
  select * into r from public.hf_interviews where id=s1;
  assert r.organizer='interviews@example.com' and jsonb_array_length(r.attendees)=3, 'organizer or attendees';
  -- The scheduler can correct the candidate email; it updates only this company's candidate and the invitation.
- perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s3,'candidate_email',' Corrected@Example.com '));
+ perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s3,'candidate_email',' Corrected@Example.com ','allow_another',true));
  assert (select email from public.hf_candidates where id=ka)='corrected@example.com', 'candidate email not corrected';
  assert exists(select 1 from public.hf_interviews i, jsonb_array_elements(i.attendees) p where i.id=s3 and p->>'email'='corrected@example.com')
   and not exists(select 1 from public.hf_interviews i, jsonb_array_elements(i.attendees) p where i.id=s3 and p->>'email'='candidate-a@example.com'), 'invitation email';
- begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',gen_random_uuid(),'candidate_email','not-an-email'));
+ begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',gen_random_uuid(),'candidate_email','not-an-email','allow_another',true));
   raise exception using errcode='HF999',message='invalid email saved';
  exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Enter a valid candidate email', sqlerrm; end;
  begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',gen_random_uuid(),'candidate_id',kb,'candidate_email','hijack@example.com'));
@@ -76,7 +76,10 @@ begin
  lease:=public.hf_meet_claim(ca,a); assert lease->>'state'='ready', 'claim';
  gen:=(lease->>'generation')::uuid; worker:=(lease->>'lease_id')::uuid;
  assert public.hf_meet_claim(ca,a)->>'state'='busy', 'second claim';
- perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s2));
+ -- A second upcoming interview for the same candidate needs explicit confirmation.
+ begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s2)); raise exception using errcode='HF999',message='duplicate booked';
+ exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Candidate already has an upcoming interview', sqlerrm; end;
+ perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s2,'allow_another',true));
  select count(*) into n from public.hf_meet_due(ca,'interviews@example.com','{}',10); assert n=2, 'due';
  select count(*) into n from public.hf_meet_due(ca,'interviews@example.com',array[s1],10); assert n=1, 'due skip';
  begin perform public.hf_meet_commit(cb,gen,worker,s1,1,'{"sync":{"status":"scheduled"}}'); raise exception using errcode='HF999',message='cross-company commit';
