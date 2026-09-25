@@ -4,7 +4,7 @@
 
 The existing active Zap is **Interior + Exterior Hiring | Facebook Leads → Hiring Sheet**. Preserve its Google Sheets step. The deployed Zap has a Webhooks by Zapier POST action after it, before delay/outbound communication actions. Use the same ordering when setting up another company.
 
-POST `/api/webhooks/intake` with JSON and `Authorization: Bearer <company intake token>`. Generate the token in Settings. This token is company-specific; only its SHA-256 hash is stored. Rotating it invalidates the old token immediately.
+POST `/api/webhooks/intake` with JSON and `Authorization: Bearer <company intake token>`. Generate the token in Integrations. This token is company-specific; only its SHA-256 hash is stored. Rotating it invalidates the old token immediately.
 
 | HireFlow field | Existing Meta / Sheet field |
 | --- | --- |
@@ -25,7 +25,7 @@ Use a JSON array for `tags`, and a JSON object for `attributes`. Never generate 
 
 ## Quo
 
-Each company configures its own API key, phone ID, number, and webhook signing secrets in Settings. Secrets are only accessible to the server role, never returned to browsers. The Ottawa Painters production line is +13433265133, ID `PNHtOrvjNR`.
+Each company configures its own API key, phone ID, number, and webhook signing secrets in Integrations. Secrets are only accessible to the server role, never returned to browsers. The Ottawa Painters production line is +13433265133, ID `PNHtOrvjNR`.
 
 Subscribe `/api/webhooks/quo/<company-id>` to `message.received`, `message.delivered` and `call.completed` events for the company’s selected phone line. The handler supports Quo’s `data.object` payload. Signature verification follows Quo's HMAC-SHA256 specification: base64 signing secret, `<timestamp>.<compact JSON>`, `openphone-signature` header, five-minute tolerance, constant-time comparison. When Quo creates separate message and call webhooks, enter both signing secrets separated by commas.
 
@@ -39,7 +39,7 @@ Configure Supabase Auth's email provider separately for account confirmation and
 
 ## Google Workspace
 
-Each company connects one Google Workspace account in **Settings → Google Workspace**, typically its hiring inbox. That single account powers email import, interview scheduling and recordings:
+Each company connects one Google Workspace account in **Integrations → Google Workspace** (or from the Calendar page), typically its hiring inbox. That single account powers email import, interview scheduling and recordings:
 
 - **Email:** incoming and sent messages are imported into Chat.
 - **Interviews:** the Calendar view creates Google Calendar events with a Meet link on the account's calendar and invites the candidate and selected teammates.

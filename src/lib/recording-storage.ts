@@ -27,8 +27,8 @@ class CopyError extends Error {}
 type Claim = { company_id: string; name: string; interview_id: string; drive_file_id: string; credentials: string };
 function driveError(status: number) {
   return new CopyError(
-    status === 401 ? "Google authorization expired. Reconnect Google in Settings to save recordings." :
-    status === 403 ? "Google Drive denied access. Reconnect Google in Settings and allow access to Meet recordings." :
+    status === 401 ? "Google authorization expired. Reconnect Google in Integrations to save recordings." :
+    status === 403 ? "Google Drive denied access. Reconnect Google in Integrations and allow access to Meet recordings." :
     status === 404 ? "The recording is no longer in Google Drive." :
     "Could not copy the recording from Google Drive. HireFlow will retry.");
 }

@@ -4,6 +4,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, RefreshCw, Play, 
 import type { Workspace } from "@/lib/types";
 import { interviewCalendarTitle, interviewLengths, localDateTime, localInterviewWindow, type Interview, type Recording, type GoogleConnection } from "@/lib/interviews";
 import { Field, Modal } from "./primitives";
+import { GoogleResult } from "./integrations";
 import "./interviews.css";
 
 async function json(url: string, body?: unknown) {
@@ -69,12 +70,17 @@ export function Interviews({data}: {data:Workspace}) {
     </header>
     {error&&<p className="error" role="alert">{error}</p>}
     {notice&&<p role="status" className="interview-notice">{notice}</p>}
+    <GoogleResult/>
     <div className="interview-connection">
       <div><Video size={18}/><span>{connection?.connected?<><strong>{connection.account}</strong><small>Invitations and Meet links come from this Google account{connection.instant_updates?" · Instant updates on":""}</small></>:
-        loaded?admin?"Connect your company's Google account in Settings to schedule interviews.":"Ask an admin to connect Google in Settings to schedule interviews.":"Checking Google connection…"}</span></div>
+        loaded?admin?"Connect your company's Google Workspace account to schedule interviews. It also imports candidate email and saves recordings for your team.":"Ask an admin to connect Google to schedule interviews.":"Checking Google connection…"}</span></div>
       <div>
         {connection?.connected&&<button disabled={busy} onClick={()=>void sync()}><RefreshCw size={15}/> {busy?"Syncing…":"Sync now"}</button>}
-        {admin&&connection&&!connection.connected&&<a className="primary interview-button" href={`/?company=${cid}&view=settings`}>Connect Google</a>}
+        {admin&&connection&&!connection.connected&&<button className="primary" disabled={busy||!connection.available} onClick={async()=>{
+          setBusy(true);setError("");
+          try {location.assign((await json("/api/google/connect",{company_id:cid,view:"calendar"})).url);}
+          catch(e){setError((e as Error).message);setBusy(false);}
+        }}>Connect Google</button>}
       </div>
     </div>
     {connection?.last_error&&<p className="error">{connection.last_error}</p>}

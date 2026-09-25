@@ -18,7 +18,7 @@ export async function syncQuo(cid: string, candidateId: string) {
     .eq("company_id", cid)
     .single();
   if (!i?.quo_api_key || !i.quo_phone_id || !i.quo_phone)
-    throw new Error("Ask an admin to connect Quo in Settings.");
+    throw new Error("Ask an admin to connect Quo in Integrations.");
   let count = 0;
   for (const kind of ["messages", "calls"]) {
     let cursor: string | undefined;

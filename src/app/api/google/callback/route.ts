@@ -8,13 +8,14 @@ import { syncMeet } from "@/lib/meet";
 import { adminDb } from "@/lib/supabase/server";
 export const maxDuration = 300;
 export async function GET(request: Request) {
-  const destination = new URL("/?view=settings", process.env.APP_URL);
+  const destination = new URL("/?view=integrations", process.env.APP_URL);
   const jar = await cookies();
   const saved = jar.get("hf_google_oauth")?.value;
   jar.delete({ name: "hf_google_oauth", path: "/api/google" });
   try {
     if (!saved) throw new Error("Expired");
-    const ctx = openGmail<{ state: string; verifier: string; company: string; actor: string; expires: number }>(saved);
+    const ctx = openGmail<{ state: string; verifier: string; company: string; view: string; actor: string; expires: number }>(saved);
+    destination.searchParams.set("view", ctx.view === "calendar" ? "calendar" : "integrations");
     const params = new URL(request.url).searchParams;
     const state = params.get("state") || "";
     if (ctx.expires < Date.now() || Buffer.byteLength(state) !== Buffer.byteLength(ctx.state) ||

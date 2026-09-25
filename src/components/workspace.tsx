@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Users,
   Settings as SettingsIcon,
+  Plug,
   LogOut,
   Plus,
   ArrowRight,
@@ -33,6 +34,7 @@ import { CandidateDetail, CandidateEditor } from "./candidate-detail";
 import { Team } from "./team";
 import { Metrics } from "./metrics";
 import { Settings } from "./settings";
+import { Integrations } from "./integrations";
 import { Interviews } from "./interviews";
 import { Recordings } from "./recordings";
 export function Workspace() {
@@ -117,8 +119,8 @@ export function Workspace() {
       return;
     }
     const initialView = new URLSearchParams(location.search).get("view");
-    if (initialView && ["metrics", "team", "settings", "calendar", "recordings"].includes(initialView)) setView(initialView);
-    if (new URLSearchParams(location.search).has("gmail")) setView("settings");
+    if (initialView && ["metrics", "team", "settings", "integrations", "calendar", "recordings"].includes(initialView)) setView(initialView);
+    if (new URLSearchParams(location.search).has("gmail")) setView("integrations");
     companyRef.current = new URLSearchParams(location.search).get("company");
     void load(companyRef.current);
     const db = browserDb();
@@ -458,6 +460,14 @@ export function Workspace() {
               <SettingsIcon size={19} /> Settings
             </button>
           )}
+          {admin && (
+            <button
+              className={view === "integrations" ? "active" : ""}
+              onClick={() => changeView("integrations")}
+            >
+              <Plug size={19} /> Integrations
+            </button>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="profile">
@@ -514,7 +524,11 @@ export function Workspace() {
         ) : view === "team" ? (
           <Team data={data} mutate={mutate} />
         ) : admin ? (
-          <Settings data={data} mutate={mutate} onRefresh={() => load()} />
+          view === "integrations" ? (
+            <Integrations data={data} mutate={mutate} onRefresh={() => load()} />
+          ) : (
+            <Settings data={data} mutate={mutate} />
+          )
         ) : (
           <Empty title="Admin access required" />
         )}

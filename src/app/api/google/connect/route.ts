@@ -9,11 +9,14 @@ import { sameOrigin, failure, bodyJson } from "@/lib/http";
 export async function POST(request: Request) {
   try {
     sameOrigin(request);
-    const company = z.uuid().parse((await bodyJson(request)).company_id);
+    const body = await bodyJson(request);
+    const company = z.uuid().parse(body.company_id);
+    // Google returns to the page that started the connection.
+    const view = z.enum(["integrations", "calendar"]).catch("integrations").parse(body.view);
     const { user } = await companyMember(company, true);
     const state = randomBytes(32).toString("hex");
     const verifier = randomBytes(48).toString("base64url");
-    (await cookies()).set("hf_google_oauth", sealGmail({ state, verifier, company, actor: user.id, expires: Date.now() + 600000 }),
+    (await cookies()).set("hf_google_oauth", sealGmail({ state, verifier, company, view, actor: user.id, expires: Date.now() + 600000 }),
       { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/google", maxAge: 600 });
     const url = googleOAuth().generateAuthUrl({
       access_type: "offline", prompt: "consent select_account", scope: googleScopes, state,

@@ -43,7 +43,7 @@ function authFailure(error: unknown) {
 }
 export function meetError(error: unknown) {
   const code = httpStatus(error);
-  if (authFailure(error)) return "Google authorization expired. An admin needs to reconnect Google in Settings.";
+  if (authFailure(error)) return "Google authorization expired. An admin needs to reconnect Google in Integrations.";
   if (code === 403) return "Google denied access. Check Calendar and Meet API permissions, organizer access, and Workspace settings.";
   if (code === 429) return "Google is busy. HireFlow will retry automatically.";
   return "Google sync failed. HireFlow will retry; existing sessions and recordings are preserved.";

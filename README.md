@@ -71,9 +71,9 @@ The core hiring workspace works without connecting external services.
 
 | Integration | What it adds | Setup |
 | --- | --- | --- |
-| Zapier / webhooks | Company-scoped application intake with retry deduplication | Generate an intake token in Settings; POST to `/api/webhooks/intake` |
-| Quo | Candidate call and SMS history; signed webhook updates | Configure the company's API key, phone line, and signing secrets in Settings |
-| Google Workspace | One account per company: read-only email sync with private resume attachments, Calendar/Meet interviews, and recordings copied to private storage for the team | Configure Google OAuth, server encryption and recording storage, then connect the account in Settings |
+| Zapier / webhooks | Company-scoped application intake with retry deduplication | Generate an intake token in Integrations; POST to `/api/webhooks/intake` |
+| Quo | Candidate call and SMS history; signed webhook updates | Configure the company's API key, phone line, and signing secrets in Integrations |
+| Google Workspace | One account per company: read-only email sync with private resume attachments, Calendar/Meet interviews, and recordings copied to private storage for the team | Configure Google OAuth, server encryption and recording storage, then connect the account in Integrations |
 | SMTP | Team invitation emails and interview organizer confirmations | Set the `SMTP_*` server environment variables |
 
 See [the integration guide](docs/INTEGRATIONS.md) for payload mapping, callback URLs, secrets, and verification commands. HireFlow imports email; it does not send it. Ambiguous conversation matches remain unassigned for manual review.

@@ -220,7 +220,7 @@ export async function syncGmail(company: string, actor: string | null = null) {
       last_error:
         status(e) === 401 ||
         String((e as Error)?.message).includes("invalid_grant")
-          ? "Google authorization expired. Reconnect Google in Settings."
+          ? "Google authorization expired. Reconnect Google in Integrations."
           : "Gmail sync failed. Retry sync or reconnect if this continues.",
       lease_id: null,
       lease_until: null,
