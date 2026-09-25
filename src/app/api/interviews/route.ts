@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod";
-import { meetMember, syncMeet } from "@/lib/meet";
+import { syncMeet } from "@/lib/meet";
+import { companyMember } from "@/lib/google";
 import { interviewSchema } from "@/lib/interviews";
 import { adminDb } from "@/lib/supabase/server";
 import { sameOrigin, bodyJson, failure } from "@/lib/http";
@@ -9,7 +10,7 @@ export async function GET(request:Request) {
   try {
     const params=new URL(request.url).searchParams;
     const company=z.uuid().parse(params.get("company"));
-    const {db}=await meetMember(company);
+    const {db}=await companyMember(company);
     const start=z.iso.datetime().parse(params.get("start"));
     const end=z.iso.datetime().parse(params.get("end"));
     if(Date.parse(end)<=Date.parse(start)||Date.parse(end)-Date.parse(start)>62*86400000) throw new Error("Invalid calendar range.");
@@ -27,7 +28,7 @@ export async function POST(request:Request) {
     sameOrigin(request);
     const body=await bodyJson(request);
     const company=z.uuid().parse(body.company_id);
-    const {user}=await meetMember(company);
+    const {user}=await companyMember(company);
     const payload=body.payload?.cancel
       ? z.object({id:z.uuid(),version:z.number().int().positive(),cancel:z.literal(true)}).parse(body.payload)
       : interviewSchema.parse(body.payload);

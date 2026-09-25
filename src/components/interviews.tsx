@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, RefreshCw, Play, ExternalLink } from "lucide-react";
 import type { Workspace } from "@/lib/types";
-import { interviewCalendarTitle, interviewLengths, localDateTime, localInterviewWindow, type Interview, type Recording, type MeetConnection } from "@/lib/interviews";
+import { interviewCalendarTitle, interviewLengths, localDateTime, localInterviewWindow, type Interview, type Recording, type GoogleConnection } from "@/lib/interviews";
 import { Field, Modal } from "./primitives";
 import "./interviews.css";
 
@@ -13,12 +13,6 @@ async function json(url: string, body?: unknown) {
   return value;
 }
 function dateLabel(iso:string, options:Intl.DateTimeFormatOptions) {return new Date(iso).toLocaleString(undefined,options);}
-const callbackErrors:Record<string,string>={
-  "wrong-account":"Choose the organizer email you entered when connecting.",
-  "not-workspace":"Connect a Google Workspace account. Meet recording is not available for personal Google accounts.",
-  "organizer-active":"The current organizer still has active interviews. Reconnect that account, or wait until three days after its last interview.",
-  error:"Google was not connected. Check the OAuth setup and allow all requested permissions.",
-};
 function dayKey(date:Date) {return localDateTime(date.toISOString()).slice(0,10);}
 
 export function Interviews({data}: {data:Workspace}) {
@@ -26,10 +20,9 @@ export function Interviews({data}: {data:Workspace}) {
   const [month,setMonth]=useState(()=>new Date(new Date().getFullYear(),new Date().getMonth(),1));
   const [sessions,setSessions]=useState<Interview[]>([]);
   const [recordings,setRecordings]=useState<Recording[]>([]);
-  const [connection,setConnection]=useState<MeetConnection|null>(null);
+  const [connection,setConnection]=useState<GoogleConnection|null>(null);
   const [selected,setSelected]=useState<string|null>(null);
   const [editing,setEditing]=useState<Interview|null|undefined>();
-  const [connecting,setConnecting]=useState(false);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
   const [loaded,setLoaded]=useState(false);
@@ -44,7 +37,7 @@ export function Interviews({data}: {data:Workspace}) {
     const current=++generation.current;
     try {
       const params=new URLSearchParams({company:cid,start:startISO,end:endISO});
-      const [result,status]=await Promise.all([json(`/api/interviews?${params}`),json(`/api/meet?company=${cid}`)]);
+      const [result,status]=await Promise.all([json(`/api/interviews?${params}`),json(`/api/google?company=${cid}`)]);
       if(current!==generation.current) return;
       setSessions(result.sessions);setRecordings(result.recordings);setConnection(status);setError("");setLoaded(true);
     } catch(e) {if(current===generation.current) {setError((e as Error).message);setLoaded(true);}}
@@ -54,21 +47,19 @@ export function Interviews({data}: {data:Workspace}) {
     const timer=setInterval(()=>{if(document.visibilityState==="visible") void load();},30000);
     return()=>{clearInterval(timer);generation.current++;};
   },[load]);
-  async function action(action:"sync"|"disconnect",id?:string) {
+  async function sync(id?:string) {
     setBusy(true);setError("");
     try {
-      const result=await json("/api/meet",{company_id:cid,action,id});
+      const result=await json("/api/google",{company_id:cid,action:"sync",id});
       await load();
       if(result.error) setError(result.error);
-      setNotice(action==="disconnect"?"Google disconnected. Existing Google events and recordings are unchanged.":
-        result.state==="busy"?"Google sync is already running. Changes will appear shortly.":
+      setNotice(result.state==="busy"?"Google sync is already running. Changes will appear shortly.":
         result.state==="ready"&&!result.error?"Google sync finished.":"");
     } catch(e) {setError((e as Error).message);} finally {setBusy(false);}
   }
   const calendarTitle=(s:Interview)=>interviewCalendarTitle(s.title,data.candidates.find(c=>c.id===s.candidate_id)?.name||"");
   const session=sessions.find(s=>s.id===selected);
   const admin=data.membership?.role==="admin";
-  const callback=typeof window!=="undefined"?new URLSearchParams(location.search).get("meet"):null;
   const enabled=!!data.membership?.enabled;
   const sessionRecordings=session?recordings.filter(r=>r.interview_id===session.id):[];
   return <section className="interviews-page">
@@ -78,14 +69,12 @@ export function Interviews({data}: {data:Workspace}) {
     </header>
     {error&&<p className="error" role="alert">{error}</p>}
     {notice&&<p role="status" className="interview-notice">{notice}</p>}
-    {callback==="connected"&&!notice&&<p role="status" className="interview-notice">Google Meet connected. HireFlow is syncing your interviews.</p>}
-    {callback&&callback!=="connected"&&<p className="error">{callbackErrors[callback]||callbackErrors.error}</p>}
     <div className="interview-connection">
-      <div><Video size={18}/><span>{connection?.connected?<><strong>{connection.organizer}</strong><small>Google Meet connected{connection.instant_updates?" · Instant updates on":""}</small></>:"Connect an organizer to schedule Google Meet interviews."}</span></div>
+      <div><Video size={18}/><span>{connection?.connected?<><strong>{connection.account}</strong><small>Invitations and Meet links come from this Google account{connection.instant_updates?" · Instant updates on":""}</small></>:
+        loaded?admin?"Connect your company's Google account in Settings to schedule interviews.":"Ask an admin to connect Google in Settings to schedule interviews.":"Checking Google connection…"}</span></div>
       <div>
-        {connection?.connected&&<button disabled={busy} onClick={()=>void action("sync")}><RefreshCw size={15}/> {busy?"Syncing…":"Sync now"}</button>}
-        {admin&&<button disabled={busy||!connection?.available} onClick={()=>setConnecting(true)}>{connection?.connected?"Reconnect":"Connect Google Meet"}</button>}
-        {admin&&connection?.connected&&<button disabled={busy} onClick={()=>{if(confirm("Disconnect Google Meet? Existing Google events and recordings will remain, but scheduling and automatic sync will stop.")) void action("disconnect");}}>Disconnect</button>}
+        {connection?.connected&&<button disabled={busy} onClick={()=>void sync()}><RefreshCw size={15}/> {busy?"Syncing…":"Sync now"}</button>}
+        {admin&&connection&&!connection.connected&&<a className="primary interview-button" href={`/?company=${cid}&view=settings`}>Connect Google</a>}
       </div>
     </div>
     {connection?.last_error&&<p className="error">{connection.last_error}</p>}
@@ -120,19 +109,6 @@ export function Interviews({data}: {data:Workspace}) {
           <div>{s.meet_url&&s.status!=="cancelled"&&!s.cancel_requested&&<a href={s.meet_url} target="_blank" rel="noreferrer"><Video size={16}/> Join Meet</a>}<button onClick={()=>setSelected(s.id)}>Details & recordings</button></div>
         </div>)}
     </div>
-    {connecting&&<Modal title="Connect Google Meet" onClose={()=>setConnecting(false)}>
-      <form onSubmit={async e=>{
-        e.preventDefault();const email=new FormData(e.currentTarget).get("organizer");setBusy(true);setError("");
-        try {const result=await json("/api/meet/connect",{company_id:cid,organizer:email});location.assign(result.url);}
-        catch(e){setError((e as Error).message);setBusy(false);}
-      }}>
-        <p>Use the Google Workspace account that will host interviews. Invitations are sent from its calendar, and recordings stay in its Google Drive.</p>
-        <Field label="Organizer email"><input type="email" name="organizer" required defaultValue={connection?.organizer||data.user.email}/></Field>
-        <p className="muted">Google will ask for permission to manage calendar events and read and configure meetings. Recordings retain their Google Drive access permissions.</p>
-        {error&&<p className="error">{error}</p>}
-        <footer className="form-actions"><button className="primary" disabled={busy}>Continue to Google</button></footer>
-      </form>
-    </Modal>}
     {editing!==undefined&&<InterviewEditor key={editing?.id||"new"} data={data} session={editing} onClose={()=>setEditing(undefined)} onSave={async id=>{setEditing(undefined);setSelected(id);setNotice("Session saved. Google invitations and Meet details are syncing.");await load();}}/>}
     {session&&editing===undefined&&<Modal title={calendarTitle(session)} onClose={()=>setSelected(null)}>
       <div className="interview-details">
@@ -147,17 +123,18 @@ export function Interviews({data}: {data:Workspace}) {
         <div className="interview-detail-actions">
           {session.meet_url&&session.status!=="cancelled"&&!session.cancel_requested&&<a className="primary interview-button" href={session.meet_url} target="_blank" rel="noreferrer"><Video size={17}/> Join Google Meet <ExternalLink size={14}/></a>}
           {session.status!=="cancelled"&&!session.cancel_requested&&<button disabled={!enabled||!connection?.connected} onClick={()=>setEditing(session)}>Edit session</button>}
-          <button disabled={busy||!connection?.connected} onClick={()=>void action("sync",session.id)}><RefreshCw size={15}/> Refresh session</button>
+          <button disabled={busy||!connection?.connected} onClick={()=>void sync(session.id)}><RefreshCw size={15}/> Refresh session</button>
         </div>
         <h3>Recordings</h3>
         <p className="muted">{session.recording_setup==="on"?`Recording starts automatically when ${session.organizer} joins from a web browser.`:session.recording_setup==="off"?"Automatic recording is off. Record manually in Google Meet.":session.recording_setup==="pending"?"Recording setup pending.":"Start recording manually in Google Meet."}</p>
         {session.recording_error&&<p className="error">{session.recording_error}</p>}
         {sessionRecordings.map(r=><div className="interview-recording" key={r.name}>
-          <Video size={21}/><div><strong>{r.starts_at?dateLabel(r.starts_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"Meeting recording"}</strong><small>{r.state==="FILE_GENERATED"?"Available in Google Drive":r.state==="STARTED"?"Recording in progress":"Processing in Google"}{r.starts_at&&r.ends_at?` · ${Math.max(1,Math.round((Date.parse(r.ends_at)-Date.parse(r.starts_at))/60000))} min`:""}</small></div>
-          {r.playback_url&&<a href={r.playback_url} target="_blank" rel="noreferrer"><Play size={15}/> Watch recording</a>}
+          <Video size={21}/><div><strong>{r.starts_at?dateLabel(r.starts_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"Meeting recording"}</strong><small>{r.storage_key?"Saved for your team":r.state==="FILE_GENERATED"?"Available in Google Drive":r.state==="STARTED"?"Recording in progress":"Processing in Google"}{r.starts_at&&r.ends_at?` · ${Math.max(1,Math.round((Date.parse(r.ends_at)-Date.parse(r.starts_at))/60000))} min`:""}</small></div>
+          {r.storage_key?<a href={`/?company=${cid}&view=recordings`}><Play size={15}/> Watch recording</a>
+            :r.playback_url&&<a href={r.playback_url} target="_blank" rel="noreferrer"><Play size={15}/> Watch in Drive</a>}
         </div>)}
         {!sessionRecordings.length&&<p>{session.meeting_ended_at?"No recording was made for this meeting.":"No recording yet. Recordings appear here after Google processes them."}</p>}
-        {sessionRecordings.length>0&&<small>Invited teammates can watch in Google Drive. Others need the organizer to share the file.</small>}
+        {sessionRecordings.some(r=>!r.storage_key)&&<small>Recordings not yet saved to HireFlow play from the organizer&apos;s Google Drive.</small>}
         {session.status!=="cancelled"&&!session.cancel_requested&&<button className="danger" disabled={busy||!connection?.connected} onClick={async()=>{
           if(!confirm("Cancel this interview and notify all invited participants?")) return;
           setBusy(true);try {await json("/api/interviews",{company_id:cid,payload:{id:session.id,version:session.version,cancel:true}});await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}

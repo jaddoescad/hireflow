@@ -20,7 +20,8 @@
 .recording-links{display:flex;gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid #f0f3f8}
 .recording-links button,.recording-links a{display:inline-flex;align-items:center;gap:4px;border:0;background:none;padding:0;font-size:.8rem;font-weight:600;color:var(--blue)}
 .recording-player{aspect-ratio:16/9;width:100%;background:#0a1220;border-radius:10px;overflow:hidden}
-.recording-player iframe{width:100%;height:100%;border:0;display:block}
+.recording-player iframe,.recording-player video{width:100%;height:100%;border:0;display:block}
+.recording-loading{height:100%;display:flex;align-items:center;justify-content:center;color:#fff}
 .recording-note{margin-top:18px;font-size:.8rem;color:var(--muted)}
 .recording-empty{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:60px 20px;color:var(--muted);max-width:440px;margin:auto}
 .recording-empty h3{color:var(--text)}

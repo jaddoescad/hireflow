@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { sessionDb, adminDb } from "@/lib/supabase/server";
+import { googleAvailable } from "@/lib/google";
+import { recordingStorageConfigured } from "@/lib/recording-storage";
 import { failure } from "@/lib/http";
 import { z } from "zod";
 import { allCandidates } from "@/lib/candidates";
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
     let integration = null;
     if (membership.role === "admin") {
       const admin = adminDb();
-      const [inv, settings, gmail] = await Promise.all([
+      const [inv, settings, google, gmail] = await Promise.all([
         admin
           .from("hf_invitations")
           .select("id,email,role,expires_at,accepted_at,revoked_at,created_at")
@@ -77,26 +79,29 @@ export async function GET(request: Request) {
           .eq("company_id", cid)
           .single(),
         admin
+          .from("hf_google_connections")
+          .select("account,credentials")
+          .eq("company_id", cid)
+          .maybeSingle(),
+        admin
           .from("hf_gmail_connections")
-          .select("mailbox,credentials,synced_at,last_error")
+          .select("synced_at,last_error")
           .eq("company_id", cid)
           .maybeSingle(),
       ]);
       if (inv.error) throw inv.error;
       if (settings.error) throw settings.error;
+      if (google.error) throw google.error;
       if (gmail.error) throw gmail.error;
       invitations = inv.data;
       const s = settings.data;
       integration = {
-        gmail_available: !!(
-          process.env.GOOGLE_CLIENT_ID &&
-          process.env.GOOGLE_CLIENT_SECRET &&
-          process.env.GMAIL_TOKEN_KEY
-        ),
-        gmail_connected: !!gmail.data?.credentials,
-        gmail_mailbox: gmail.data?.mailbox || null,
+        google_available: googleAvailable(),
+        google_connected: !!google.data?.credentials,
+        google_account: google.data?.credentials ? google.data.account : null,
         gmail_synced_at: gmail.data?.synced_at || null,
         gmail_error: gmail.data?.last_error || null,
+        recording_storage: recordingStorageConfigured(),
         intake_configured: !!s.intake_key_hash,
         quo_configured: !!(
           s.quo_api_key &&

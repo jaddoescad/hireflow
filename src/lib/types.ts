@@ -95,11 +95,12 @@ export type Workspace = {
   activities: Activity[];
   invitations: Invitation[];
   integration: {
-    gmail_available: boolean;
-    gmail_connected: boolean;
-    gmail_mailbox: string | null;
+    google_available: boolean;
+    google_connected: boolean;
+    google_account: string | null;
     gmail_synced_at: string | null;
     gmail_error: string | null;
+    recording_storage: boolean;
     intake_configured: boolean;
     quo_configured: boolean;
     quo_phone: string | null;

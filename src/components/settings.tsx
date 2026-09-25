@@ -47,28 +47,36 @@ export function Settings({
     }
   }
 
-  async function gmailAction(action: "connect" | "sync" | "disconnect") {
+  async function googleAction(action: "connect" | "sync" | "disconnect") {
+    if (action === "disconnect" && !confirm("Disconnect Google? Email import, interview scheduling and recording copies stop until an admin reconnects. Saved emails and recordings stay."))
+      return;
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/gmail/${action}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: data.company?.id }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
-      if (result.url) {
-        window.location.assign(result.url);
+      const post = async (url: string, body: Record<string, unknown> = {}) => {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_id: data.company?.id, ...body }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        return result;
+      };
+      if (action === "connect") {
+        window.location.assign((await post("/api/google/connect")).url);
         return;
       }
+      if (action === "sync") await Promise.all([post("/api/google", { action: "sync_email" }), post("/api/google", { action: "sync" })]);
+      else await post("/api/google", { action: "disconnect" });
       await onRefresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Gmail connection failed.");
+      setError(e instanceof Error ? e.message : "Google connection failed.");
     } finally {
       setBusy(false);
     }
   }
+  const googleResult = typeof window === "undefined" ? null : new URLSearchParams(location.search).get("google");
   return (
     <>
       <header className="page-header">
@@ -93,38 +101,42 @@ export function Settings({
         <section className="panel">
           <div className="panel-heading">
             <h2>
-              <Mail size={18} /> Gmail
+              <Mail size={18} /> Google Workspace
             </h2>
           </div>
           <div className="panel-form">
             <p>
-              Bring candidate emails and resumes into Chat. Match messages by
-              email address.
+              One company account for hiring. Candidate emails and resumes
+              arrive in Chat, interviews are sent from its calendar with a Meet
+              link, and recordings are saved for everyone on your team.
             </p>
-            {data.integration?.gmail_connected ? (
+            {data.integration?.google_connected ? (
               <>
                 <p>
-                  <strong>{data.integration.gmail_mailbox}</strong>
+                  <strong>{data.integration.google_account}</strong>
                 </p>
                 <p className="muted">
                   {data.integration.gmail_synced_at
-                    ? `Last synced ${when(data.integration.gmail_synced_at)}`
-                    : "First sync in progress…"}
+                    ? `Email last synced ${when(data.integration.gmail_synced_at)}`
+                    : "First email sync in progress…"}
                 </p>
                 {data.integration.gmail_error && (
                   <p className="error">{data.integration.gmail_error}</p>
                 )}
+                {!data.integration.recording_storage && (
+                  <p className="muted">
+                    Recording storage is not set up on this server, so
+                    recordings stay in this account&apos;s Google Drive.
+                  </p>
+                )}
                 <div className="gmail-actions">
-                  <button
-                    disabled={busy}
-                    onClick={() => void gmailAction("sync")}
-                  >
+                  <button disabled={busy} onClick={() => void googleAction("sync")}>
                     {busy ? "Please wait…" : "Sync now"}
                   </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => void gmailAction("disconnect")}
-                  >
+                  <button disabled={busy} onClick={() => void googleAction("connect")}>
+                    Reconnect
+                  </button>
+                  <button disabled={busy} onClick={() => void googleAction("disconnect")}>
                     Disconnect
                   </button>
                 </div>
@@ -132,29 +144,36 @@ export function Settings({
             ) : (
               <>
                 <p className="muted">
-                  Read-only access. Email sending stays in Gmail.
+                  Use a Google Workspace account with Meet recording, such as
+                  your hiring inbox. HireFlow reads email, manages interview
+                  events and copies Meet recordings. It never sends email.
                 </p>
                 <button
                   className="primary"
-                  disabled={busy || !data.integration?.gmail_available}
-                  onClick={() => void gmailAction("connect")}
+                  disabled={busy || !data.integration?.google_available}
+                  onClick={() => void googleAction("connect")}
                 >
-                  Connect Gmail
+                  Connect Google
                 </button>
-                {!data.integration?.gmail_available && (
+                {!data.integration?.google_available && (
                   <p className="muted">
-                    The workspace owner needs to finish Gmail setup.
+                    The workspace owner needs to finish Google setup.
                   </p>
                 )}
               </>
             )}
-            {typeof window !== "undefined" &&
-              new URLSearchParams(location.search).get("gmail") === "error" && (
-                <p className="error">
-                  Gmail wasn't connected. Try again and allow read-only email
-                  access.
-                </p>
-              )}
+            {googleResult === "connected" && (
+              <p className="notice" role="status">Google connected. HireFlow is syncing email and interviews.</p>
+            )}
+            {googleResult && googleResult !== "connected" && (
+              <p className="error">
+                {googleResult === "not-workspace"
+                  ? "Connect a Google Workspace account. Meet recording is not available for personal Google accounts."
+                  : googleResult === "permissions"
+                    ? "Google wasn't connected. Allow every requested permission so email, interviews and recordings work."
+                    : "Google wasn't connected. Try again."}
+              </p>
+            )}
           </div>
         </section>
         <section className="panel">

@@ -74,23 +74,26 @@ try {
     }),
   );
   assert((await a.session.from("hf_gmail_connections").select("*")).error);
+  assert((await a.session.from("hf_google_connections").select("*")).error);
   assert(
     (
-      await admin.rpc("hf_gmail_set", {
+      await admin.rpc("hf_google_set", {
         actor: b.id,
         cid: ca.id,
-        mailbox_address: "hiring@example.com",
+        address: "hiring@example.com",
+        google_id: "synthetic-google-user",
         encrypted_credentials: "encrypted-test-fixture",
       })
     ).error,
   );
   await ok(
-    admin.rpc("hf_gmail_set", {
-      actor: a.id,
-      cid: ca.id,
-      mailbox_address: "hiring@example.com",
-      encrypted_credentials: "encrypted-test-fixture",
-    }),
+    admin.rpc("hf_google_set", {
+        actor: a.id,
+        cid: ca.id,
+        address: "hiring@example.com",
+        google_id: "synthetic-google-user",
+        encrypted_credentials: "encrypted-test-fixture",
+      }),
   );
   assert(
     (await admin.rpc("hf_gmail_claim", { cid: ca.id, actor: b.id })).error,
@@ -232,12 +235,13 @@ try {
     c.id,
   );
   await ok(
-    admin.rpc("hf_gmail_set", {
-      actor: a.id,
-      cid: ca.id,
-      mailbox_address: null,
-      encrypted_credentials: null,
-    }),
+    admin.rpc("hf_google_set", {
+        actor: a.id,
+        cid: ca.id,
+        address: null,
+        google_id: null,
+        encrypted_credentials: null,
+      }),
   );
   assert((await ingest()).error);
   // Disconnect stops future imports, but saved resumes remain accessible to the company.
@@ -246,7 +250,7 @@ try {
     200,
   );
   console.log(
-    "PASS: Gmail tenant isolation, admin-only connection, private attachments, matching, unknown-mail linking, idempotency, exclusive sync lease and disconnect invalidation.",
+    "PASS: Gmail tenant isolation, admin-only Google connection, private attachments, matching, unknown-mail linking, idempotency, exclusive sync lease and disconnect invalidation.",
   );
 } finally {
   if (paths.length)

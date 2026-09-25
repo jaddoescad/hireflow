@@ -1,44 +1,13 @@
 import "server-only";
-import { OAuth2Client } from "google-auth-library";
 import { createHash } from "node:crypto";
-import { adminDb, sessionDb } from "./supabase/server";
-import { openGmail } from "./gmail-crypto";
+import { adminDb } from "./supabase/server";
+import { googleOAuth } from "./google";
 import {
   loadGmailTextParts,
   parseGmailMessage,
   type GmailMessage,
 } from "./gmail-message";
-export const gmailScope = "https://www.googleapis.com/auth/gmail.readonly";
 export const attachmentBucket = "hf-mail-attachments";
-export function gmailOAuth() {
-  if (
-    !process.env.GOOGLE_CLIENT_ID ||
-    !process.env.GOOGLE_CLIENT_SECRET ||
-    !process.env.GMAIL_TOKEN_KEY
-  )
-    throw new Error("Gmail connection is not configured on this server.");
-  return new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    `${new URL(process.env.APP_URL!).origin}/api/gmail/callback`,
-  );
-}
-export async function gmailAdmin(company: string) {
-  const db = await sessionDb();
-  const {
-    data: { user },
-  } = await db.auth.getUser();
-  if (!user) throw new Error("Sign in to continue.");
-  const { data, error } = await db
-    .from("hf_members")
-    .select("role,enabled")
-    .eq("company_id", company)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (error || !data?.enabled || data.role !== "admin")
-    throw new Error("Admin access required.");
-  return user;
-}
 type Connection = {
   company_id: string;
   generation: string;
@@ -55,12 +24,12 @@ function status(error: unknown) {
 }
 export async function syncGmail(company: string, actor: string | null = null) {
   const started = Date.now();
-  const client = gmailOAuth();
   const db = adminDb();
   const claim = await db.rpc("hf_gmail_claim", { cid: company, actor });
   if (claim.error) throw new Error(claim.error.message);
   const connection = claim.data as Connection | null;
   if (!connection) return { synced: 0, busy: true };
+  const client = googleOAuth(connection.credentials);
   const get = async <T>(path: string) =>
     (
       await client.request<T>({
@@ -73,15 +42,11 @@ export async function syncGmail(company: string, actor: string | null = null) {
       .from("hf_gmail_connections")
       .update({ ...values, updated_at: new Date().toISOString() })
       .eq("company_id", company)
-      .eq("generation", connection.generation)
       .eq("lease_id", connection.lease_id);
     if (result.error) throw result.error;
   };
   let synced = 0;
   try {
-    client.setCredentials(
-      openGmail<{ refresh_token: string }>(connection.credentials),
-    );
     let ids: string[] = [];
     let checkpoint: Record<string, unknown>;
     if (!connection.bootstrap_started || connection.bootstrap_page) {
@@ -255,7 +220,7 @@ export async function syncGmail(company: string, actor: string | null = null) {
       last_error:
         status(e) === 401 ||
         String((e as Error)?.message).includes("invalid_grant")
-          ? "Gmail authorization expired. Reconnect Gmail."
+          ? "Google authorization expired. Reconnect Google in Settings."
           : "Gmail sync failed. Retry sync or reconnect if this continues.",
       lease_id: null,
       lease_until: null,

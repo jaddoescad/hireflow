@@ -64,9 +64,10 @@ export function interviewNotificationMessage(session: InterviewNotification) {
 export type Recording = {
   interview_id: string; name: string; conference: string; state: string; starts_at: string | null;
   ends_at: string | null; drive_file_id: string | null; playback_url: string | null;
+  storage_key: string | null; storage_error: string | null;
 };
-export type MeetConnection = {
-  connected: boolean; available: boolean; organizer: string | null;
+export type GoogleConnection = {
+  connected: boolean; available: boolean; account: string | null;
   synced_at: string | null; last_error: string | null;
   instant_updates: boolean; events_error: string | null;
 };

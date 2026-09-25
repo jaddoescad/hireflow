@@ -31,15 +31,42 @@ function useRecordings(company: string, candidate?: string) {
   return { rows, error };
 }
 
+// Saved copies stream from HireFlow storage for every member; others play from the organizer's Drive.
+function Player({ data, recording }: { data: Workspace; recording: Row }) {
+  const [source, setSource] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!recording.storage_key) return;
+    let live = true;
+    const params = new URLSearchParams({ company: data.company!.id, name: recording.name });
+    fetch(`/api/recordings/play?${params}`, { cache: "no-store" }).then(async r => {
+      const value = await r.json();
+      if (!r.ok) throw new Error(value.error || "Could not load the recording.");
+      if (live) setSource(value.url);
+    }).catch(e => { if (live) setError((e as Error).message); });
+    return () => { live = false; };
+  }, [data.company, recording.name, recording.storage_key]);
+  if (recording.storage_key) return <>
+    <div className="recording-player">{source ? <video src={source} controls autoPlay playsInline /> : !error && <p className="recording-loading"><LoaderCircle size={20} className="spin" /></p>}</div>
+    {error && <p className="error" role="alert">{error}</p>}
+  </>;
+  const drive = recordingPreviewUrl(recording.drive_file_id);
+  return <>
+    {drive ? <div className="recording-player"><iframe src={drive} title="Interview recording" allow="autoplay; fullscreen" allowFullScreen /></div>
+      : <p>This recording can only be opened in Google Drive.</p>}
+    <p className="recording-note">Not saved to HireFlow yet, so it plays with your Google account. If Google asks for access, ask the organizer to share the file
+      {recording.playback_url ? <>, or <a href={recording.playback_url} target="_blank" rel="noreferrer">open it in Google Drive</a>.</> : "."}</p>
+  </>;
+}
+
 function RecordingGrid({ data, rows, onCandidate }: { data: Workspace; rows: Row[]; onCandidate?: (c: Candidate) => void }) {
   const [playing, setPlaying] = useState<Row | null>(null);
-  const player = recordingPreviewUrl(playing?.drive_file_id);
   return <>
     <div className="recording-grid">
       {rows.map(r => {
         const candidate = data.candidates.find(c => c.id === r.interview.candidate_id);
         const length = minutes(r);
-        const ready = !!r.playback_url;
+        const ready = !!(r.storage_key || r.playback_url);
         const thumbnail = ready ? recordingThumbnailUrl(r.drive_file_id) : null;
         return <article className="recording-card" key={r.name}>
           <button className="recording-thumb" disabled={!ready} onClick={() => setPlaying(r)} aria-label={`Play ${r.interview.title}${candidate ? ` with ${candidate.name}` : ""}`}>
@@ -53,17 +80,14 @@ function RecordingGrid({ data, rows, onCandidate }: { data: Workspace; rows: Row
             <small>{r.starts_at ? new Date(r.starts_at).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Meeting recording"}</small>
             <div className="recording-links">
               {candidate && onCandidate && <button onClick={() => onCandidate(candidate)}>Candidate</button>}
-              {r.playback_url && <a href={r.playback_url} target="_blank" rel="noreferrer">Drive <ExternalLink size={12} /></a>}
+              {!r.storage_key && r.playback_url && <a href={r.playback_url} target="_blank" rel="noreferrer">Drive <ExternalLink size={12} /></a>}
             </div>
           </div>
         </article>;
       })}
     </div>
     {playing && <Modal wide title={`${data.candidates.find(c => c.id === playing.interview.candidate_id)?.name || "Recording"} · ${playing.interview.title}`} onClose={() => setPlaying(null)}>
-      {player ? <div className="recording-player"><iframe src={player} title="Interview recording" allow="autoplay; fullscreen" allowFullScreen /></div>
-        : <p>This recording can only be opened in Google Drive.</p>}
-      <p className="recording-note">Plays with your Google account. If you see a sign-in or access request, ask the organizer to share the file, or
-        {playing.playback_url ? <> <a href={playing.playback_url} target="_blank" rel="noreferrer">open it in Google Drive</a>.</> : " open it in Google Drive."}</p>
+      <Player data={data} recording={playing} />
     </Modal>}
   </>;
 }
@@ -100,7 +124,7 @@ export function Recordings({ data, onCandidate }: { data: Workspace; onCandidate
         : !rows.length ? <div className="recording-empty"><Video size={30} /><h3>No recordings yet</h3><p>Schedule an interview from Calendar. When the organizer joins from a web browser, Google records it and the video appears here.</p></div>
         : !shown.length ? <p className="muted">No recordings match “{search}”.</p>
         : <RecordingGrid data={data} rows={shown} onCandidate={onCandidate} />}
-      {!!rows?.length && <p className="recording-note">Videos stay in the organizer&apos;s Google Drive. Invited teammates can watch; others need the organizer to share the file.</p>}
+      {!!rows?.length && <p className="recording-note">Recordings are copied from your company&apos;s Google account a few minutes after Google finishes processing them, so everyone on your team can watch.</p>}
     </div>
   </>;
 }

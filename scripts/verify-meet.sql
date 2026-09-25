@@ -1,4 +1,4 @@
--- Verifies Google Meet database rules with synthetic records inside one transaction, then rolls back.
+-- Verifies Google connection, Meet and recording-storage database rules with synthetic records inside one transaction, then rolls back.
 -- Run with psql or the Supabase SQL editor. Any failed check aborts with its message.
 begin;
 do $$
@@ -22,12 +22,12 @@ begin
 
  -- Connection and scheduling require enabled membership in the same company.
  begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s1)); raise exception using errcode='HF999',message='saved without connection';
- exception when sqlstate 'HF999' then raise; when others then assert sqlerrm like 'Connect Google Meet first%', sqlerrm; end;
- begin perform public.hf_meet_set(b,ca,'interviews@example.com','g-1','fixture'); raise exception using errcode='HF999',message='outsider connected';
+ exception when sqlstate 'HF999' then raise; when others then assert sqlerrm like 'Connect Google first%', sqlerrm; end;
+ begin perform public.hf_google_set(b,ca,'interviews@example.com','g-1','fixture'); raise exception using errcode='HF999',message='outsider connected';
  exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Admin access required', sqlerrm; end;
- begin perform public.hf_meet_set(d,ca,'interviews@example.com','g-1','fixture'); raise exception using errcode='HF999',message='member connected';
+ begin perform public.hf_google_set(d,ca,'interviews@example.com','g-1','fixture'); raise exception using errcode='HF999',message='member connected';
  exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Admin access required', sqlerrm; end;
- perform public.hf_meet_set(a,ca,' Interviews@Example.com ','g-1','fixture');
+ perform public.hf_google_set(a,ca,' Interviews@Example.com ','g-1','fixture');
  perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s1,'interviewer_ids',jsonb_build_array(a,d)));
  begin perform public.hf_interview_save(b,ca,base||jsonb_build_object('id',gen_random_uuid())); raise exception using errcode='HF999',message='outsider scheduled';
  exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Company access denied', sqlerrm; end;
@@ -44,7 +44,11 @@ begin
  perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
  execute 'set local role authenticated';
  select count(*) into n from public.hf_interviews; assert n=1, 'member read';
- begin perform 1 from public.hf_meet_connections; raise exception using errcode='HF999',message='credentials readable';
+ begin perform 1 from public.hf_google_connections; raise exception using errcode='HF999',message='credentials readable';
+ exception when sqlstate 'HF999' then raise; when insufficient_privilege then null; end;
+ begin perform 1 from public.hf_storage_deletions; raise exception using errcode='HF999',message='storage queue readable';
+ exception when sqlstate 'HF999' then raise; when insufficient_privilege then null; end;
+ begin perform public.hf_recording_claim(10); raise exception using errcode='HF999',message='client claimed recordings';
  exception when sqlstate 'HF999' then raise; when insufficient_privilege then null; end;
  execute 'reset role';
  perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);
@@ -132,10 +136,33 @@ begin
  assert not exists(select 1 from public.hf_meet_due(ca,'interviews@example.com','{}',10) where id=s2), 'delivered cancellation still due';
  perform public.hf_meet_commit(ca,gen,worker,null,0,'{"release":null}');
 
- -- Organizer changes wait until the current organizer's interviews settle.
- begin perform public.hf_meet_set(a,ca,'other@example.com','g-2','fixture'); raise exception using errcode='HF999',message='organizer replaced';
- exception when sqlstate 'HF999' then raise; when others then assert sqlerrm like '%still active%', sqlerrm; end;
- perform public.hf_meet_set(a,ca,'interviews@example.com','g-1','fixture-2');
+ -- Saved recordings are claimed once per company for the organizer whose Drive holds them, then queued for
+ -- storage cleanup when deleted. Another company's connection never supplies credentials.
+ perform public.hf_google_set(b,cb,'other-company@example.com','g-9','fixture-other');
+ select * into r from public.hf_recording_claim(10) c where c.company_id=ca;
+ assert r.name='conferenceRecords/qa/recordings/r1' and r.credentials='fixture' and r.interview_id=s1, 'recording claim';
+ select count(*) into n from public.hf_recording_claim(10) c where c.company_id=ca; assert n=0, 'claimed twice';
+ update public.hf_interview_recordings set storage_key=ca||'/'||s1||'/r1.mp4',storage_claim_until=null where company_id=ca;
+ select count(*) into n from public.hf_recording_claim(10) c where c.company_id=ca; assert n=0, 'saved recording claimed';
+
+ -- Switching accounts is immediate. The earlier organizer's interviews keep their history but are no longer
+ -- synced, edited or copied with the new grant; Gmail import restarts for a different mailbox.
+ update public.hf_gmail_connections set history_id='42',bootstrap_started=true where company_id=ca;
+ perform public.hf_google_set(a,ca,'interviews@example.com','g-1','fixture-2');
+ assert (select history_id from public.hf_gmail_connections where company_id=ca)='42', 'same mailbox lost checkpoint';
+ perform public.hf_google_set(a,ca,'other@example.com','g-2','fixture-3');
+ assert (select history_id is null and not bootstrap_started from public.hf_gmail_connections where company_id=ca), 'new mailbox kept checkpoint';
+ assert (select public.hf_gmail_claim(ca,a)->>'mailbox')='other@example.com', 'gmail account';
+ begin perform public.hf_gmail_claim(ca,d); raise exception using errcode='HF999',message='member claimed gmail';
+ exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Admin access required', sqlerrm; end;
+ select count(*) into n from public.hf_meet_due(ca,'other@example.com','{}',10); assert n=0, 'previous organizer due';
+ begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s1,'version',(select version from public.hf_interviews where id=s1)));
+  raise exception using errcode='HF999',message='edited with another account';
+ exception when sqlstate 'HF999' then raise; when others then assert sqlerrm like '%another Google account%', sqlerrm; end;
+ update public.hf_interview_recordings set storage_key=null where company_id=ca;
+ select count(*) into n from public.hf_recording_claim(10) c where c.company_id=ca; assert n=0, 'copied with another account';
+ perform public.hf_google_set(a,ca,'interviews@example.com','g-1','fixture-2');
+ update public.hf_interview_recordings set storage_key=ca||'/'||s1||'/r1.mp4' where company_id=ca;
 
  -- Past interviews may be corrected but not moved to another past time.
  update public.hf_interviews set starts_at=now()-interval '3 hours',ends_at=now()-interval '2 hours' where id=s1 returning version into v;
@@ -153,20 +180,25 @@ begin
  execute 'reset role';
  begin perform public.hf_meet_claim(ca,d); raise exception using errcode='HF999',message='disabled claimed';
  exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Company access denied', sqlerrm; end;
- update public.hf_meet_connections set connected_by=d where company_id=ca;
+ update public.hf_google_connections set connected_by=d where company_id=ca;
  assert public.hf_meet_claim(ca)->>'state'='reauthorize', 'reauthorize';
  assert (select last_error from public.hf_meet_connections where company_id=ca) like '%reconnect%', 'reauthorize message';
- update public.hf_meet_connections set connected_by=a where company_id=ca;
+ update public.hf_google_connections set connected_by=a where company_id=ca;
 
  -- Disconnect invalidates the running worker; history stays.
  lease:=public.hf_meet_claim(ca);
  perform public.hf_meet_commit(ca,(lease->>'generation')::uuid,(lease->>'lease_id')::uuid,null,0,'{"release":null}');
- perform public.hf_meet_set(a,ca,'',null,null);
+ perform public.hf_google_set(a,ca,'',null,null);
  begin perform public.hf_meet_commit(ca,(lease->>'generation')::uuid,(lease->>'lease_id')::uuid,s1,3,'{"sync":{"status":"scheduled"}}');
   raise exception using errcode='HF999',message='commit after disconnect';
  exception when sqlstate 'HF999' then raise; when others then assert sqlerrm='Google connection changed', sqlerrm; end;
  assert public.hf_meet_claim(ca)->>'state'='disconnected', 'disconnected';
  select count(*) into n from public.hf_interview_recordings where company_id=ca; assert n=1, 'history kept';
- raise notice 'PASS: Meet isolation, membership, leases, stale results, recordings, cancellation, organizer changes, past edits, disabled members, organizer notification retries and disconnect.';
+ assert public.hf_gmail_claim(ca) is null, 'gmail claimed after disconnect';
+
+ -- Deleting the candidate removes the interview and queues its saved video for deletion.
+ delete from public.hf_candidates where company_id=ca and id=ka;
+ assert exists(select 1 from public.hf_storage_deletions where key=ca||'/'||s1||'/r1.mp4'), 'saved video not queued for deletion';
+ raise notice 'PASS: Google connection isolation, membership, leases, stale results, recordings, recording copy claims, cancellation, account switching, Gmail checkpoints, past edits, disabled members, organizer notification retries, disconnect and storage cleanup.';
 end $$;
 rollback;

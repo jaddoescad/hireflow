@@ -12,7 +12,7 @@ The hosted app requires sign-in. Create your own company or accept an invitation
 
 - **Manage a hiring pipeline:** create candidates, customize stages, move cards with drag-and-drop or a stage selector, and search/filter by role, experience, or tags.
 - **Understand your hiring pipeline:** filter lead volume by date, experience, role, source, stage, and imported decisions; inspect stage counts and open matching applications. See [metric definitions](docs/METRICS.md).
-- **Keep context beside the candidate:** add team notes and review Quo calls/texts, Gmail conversations, and private resume attachments.
+- **Keep context beside the candidate:** add team notes, review Quo calls/texts, Gmail conversations, private resume attachments, and interview recordings saved for the whole team.
 - **Rate voice interviews:** use one shared 0–10 scorecard for all positions in each company. Admins add, edit, and remove categories in Settings. Candidate cards show a compact colored average; open Scores to enter ratings and notes.
 - **Work across companies:** switch workspaces without separate accounts. Admins manage invitations, roles, and enabled membership per company.
 - **Connect application sources:** accept authenticated Zapier/webhook submissions with stable IDs so retries do not create duplicate applications.
@@ -73,12 +73,12 @@ The core hiring workspace works without connecting external services.
 | --- | --- | --- |
 | Zapier / webhooks | Company-scoped application intake with retry deduplication | Generate an intake token in Settings; POST to `/api/webhooks/intake` |
 | Quo | Candidate call and SMS history; signed webhook updates | Configure the company's API key, phone line, and signing secrets in Settings |
-| Gmail | Read-only incoming/sent email sync and private resume attachments | Configure Google OAuth and server encryption, then connect a mailbox in Settings |
+| Google Workspace | One account per company: read-only email sync with private resume attachments, Calendar/Meet interviews, and recordings copied to private storage for the team | Configure Google OAuth, server encryption and recording storage, then connect the account in Settings |
 | SMTP | Team invitation emails and interview organizer confirmations | Set the `SMTP_*` server environment variables |
 
-See [the integration guide](docs/INTEGRATIONS.md) for payload mapping, callback URLs, secrets, and verification commands. Gmail imports messages; it does not send email. Ambiguous conversation matches remain unassigned for manual review.
+See [the integration guide](docs/INTEGRATIONS.md) for payload mapping, callback URLs, secrets, and verification commands. HireFlow imports email; it does not send it. Ambiguous conversation matches remain unassigned for manual review.
 
-The current hosted Gmail OAuth app is restricted to its configured Google Workspace organization. Other organizations need their own OAuth configuration or an appropriately configured and verified external Google app. This restriction does not prevent using HireFlow's core hiring workspace.
+The current hosted Google OAuth app is restricted to its configured Google Workspace organization. Other organizations need their own OAuth configuration or an appropriately configured and verified external Google app. This restriction does not prevent using HireFlow's core hiring workspace.
 
 For historical imports, keep source files outside Git. The importer defaults to a dry run:
 
@@ -94,10 +94,10 @@ Apply new database migrations before deploying the matching application update. 
 1. Fork or clone this repository and import it into Vercel as a **Next.js** project, using the repository root.
 2. Configure your dedicated Supabase project and apply the migrations.
 3. Set the environment variables from `.env.example` in Vercel. Use your canonical HTTPS origin for `APP_URL`. Keep service credentials, SMTP passwords, OAuth secrets, and encryption keys server-side.
-4. Deploy and add the production `/auth/callback` and `/auth/callback?invite=*` URLs to Supabase Auth. If using Gmail, register the exact `/api/gmail/callback` URL in Google OAuth.
+4. Deploy and add the production `/auth/callback` and `/auth/callback?invite=*` URLs to Supabase Auth. If using Google Workspace, register the exact `/api/google/callback` URL in Google OAuth.
 5. Point integrations at your stable production URL and run the live verification scripts below.
 
-`vercel.json` includes a five-minute Gmail sync cron. Use a Vercel plan that supports this frequency, or remove the cron entry and configure an external scheduler to call `/api/cron/gmail` with `Authorization: Bearer <CRON_SECRET>`. Keep `GMAIL_TOKEN_KEY` stable across deployments so existing mailbox credentials remain readable.
+`vercel.json` includes five-minute email, calendar and recording crons. Use a Vercel plan that supports this frequency, or remove the cron entries and configure an external scheduler to call `/api/cron/gmail`, `/api/cron/meet` and `/api/cron/recordings` with `Authorization: Bearer <CRON_SECRET>`. Keep `GMAIL_TOKEN_KEY` stable across deployments so existing Google credentials remain readable.
 
 ## Verification
 

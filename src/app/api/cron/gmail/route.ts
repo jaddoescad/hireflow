@@ -15,8 +15,8 @@ export async function GET(request: Request) {
     return new NextResponse("Unauthorized", { status: 401 });
   const { data, error } = await adminDb()
     .from("hf_gmail_connections")
-    .select("company_id")
-    .not("credentials", "is", null)
+    .select("company_id,google:hf_google_connections!inner(credentials)")
+    .not("google.credentials", "is", null)
     .order("updated_at")
     .limit(10);
   if (error)

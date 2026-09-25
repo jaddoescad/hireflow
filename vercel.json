@@ -3,6 +3,7 @@
   "framework": "nextjs",
   "crons": [
     { "path": "/api/cron/gmail", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/meet", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/meet", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/recordings", "schedule": "*/5 * * * *" }
   ]
 }

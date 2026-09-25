@@ -1,16 +1,10 @@
 import "server-only";
-import { OAuth2Client } from "google-auth-library";
-import { adminDb, sessionDb } from "./supabase/server";
+import { adminDb } from "./supabase/server";
 import { openGmail } from "./gmail-crypto";
+import { googleOAuth } from "./google";
 import { googleMeetUrl, interviewCalendarTitle, interviewTitleFromCalendar, meetingWindowOpen, recordingUrl, type Interview } from "./interviews";
 import { notifyInterviewOrganizer } from "./interview-notifications";
 
-export const meetScopes = [
-  "openid", "email",
-  "https://www.googleapis.com/auth/calendar.events.owned",
-  "https://www.googleapis.com/auth/meetings.space.readonly",
-  "https://www.googleapis.com/auth/meetings.space.settings",
-];
 const eventsApi = "https://workspaceevents.googleapis.com/v1";
 export const meetEventTypes = [
   "google.workspace.meet.conference.v2.started",
@@ -18,28 +12,9 @@ export const meetEventTypes = [
   "google.workspace.meet.recording.v2.started",
   "google.workspace.meet.recording.v2.fileGenerated",
 ];
-export function meetAvailable() {
-  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GMAIL_TOKEN_KEY);
-}
-export function meetOAuth() {
-  if (!meetAvailable()) throw new Error("Google Meet is not configured on this server.");
-  return new OAuth2Client(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET,
-    `${new URL(process.env.APP_URL!).origin}/api/meet/callback`);
-}
-export async function meetMember(company: string, adminOnly = false) {
-  const db = await sessionDb();
-  const { data: { user } } = await db.auth.getUser();
-  if (!user) throw new Error("Sign in to continue.");
-  const { data, error } = await db.from("hf_members").select("enabled,role")
-    .eq("company_id", company).eq("user_id", user.id).maybeSingle();
-  if (error || !data?.enabled || (adminOnly && data.role !== "admin"))
-    throw new Error("Company access denied.");
-  return { db, user };
-}
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 export function googleApi(credentials: string) {
-  const client = meetOAuth();
-  client.setCredentials(openGmail<{ refresh_token: string }>(credentials));
+  const client = googleOAuth(credentials);
   return async <T = unknown>(url: string, method: Method = "GET", data?: unknown) =>
     (await client.request<T>({ url, method, data, timeout: 15000, retry: false })).data;
 }
@@ -68,7 +43,7 @@ function authFailure(error: unknown) {
 }
 export function meetError(error: unknown) {
   const code = httpStatus(error);
-  if (authFailure(error)) return "Google authorization expired. An admin needs to reconnect Google Meet.";
+  if (authFailure(error)) return "Google authorization expired. An admin needs to reconnect Google in Settings.";
   if (code === 403) return "Google denied access. Check Calendar and Meet API permissions, organizer access, and Workspace settings.";
   if (code === 429) return "Google is busy. HireFlow will retry automatically.";
   return "Google sync failed. HireFlow will retry; existing sessions and recordings are preserved.";
@@ -327,8 +302,9 @@ async function renewEvents(connection: Connection, google: Google,
 // Maps a Workspace event to its interview and syncs that session. Returns true when Google should redeliver.
 export async function handleMeetEvent(subscription: string, type: string, data: { conferenceRecord?: { name?: string }; recording?: { name?: string } }) {
   const db = adminDb();
-  const { data: connections, error } = await db.from("hf_meet_connections").select("company_id,credentials")
-    .eq("events_subscription", subscription).not("credentials", "is", null);
+  const { data: connections, error } = await db.from("hf_meet_connections")
+    .select("company_id,google:hf_google_connections!inner(credentials)")
+    .eq("events_subscription", subscription).not("google.credentials", "is", null);
   if (error) throw new Error("Could not load Google connections.");
   let retry = false;
   for (const connection of connections) {
@@ -338,7 +314,9 @@ export async function handleMeetEvent(subscription: string, type: string, data: 
     }
     const conference = (data.conferenceRecord?.name || data.recording?.name || "").match(/^conferenceRecords\/[^/]+/)?.[0];
     if (!conference) continue;
-    const record = await googleApi(connection.credentials)<{ space?: string }>(`https://meet.googleapis.com/v2/${conference}`);
+    // One-to-one embed: PostgREST returns the connection row as an object.
+    const { credentials } = connection.google as unknown as { credentials: string };
+    const record = await googleApi(credentials)<{ space?: string }>(`https://meet.googleapis.com/v2/${conference}`);
     const session = await db.from("hf_interviews").select("id").eq("company_id", connection.company_id)
       .eq("meet_space", record.space || "").limit(1).maybeSingle();
     if (session.error || !session.data) continue;
@@ -348,17 +326,15 @@ export async function handleMeetEvent(subscription: string, type: string, data: 
 }
 
 // Removes the event subscription and revokes the grant unless another connection still uses this Google account.
-export async function releaseGoogle(credentials: string, organizer: string, subscription: string | null) {
+export async function releaseGoogle(credentials: string, account: string, subscription: string | null) {
   const db = adminDb();
   const google = googleApi(credentials);
   if (subscription) {
     try { await google(`${eventsApi}/${subscription}`, "DELETE"); } catch { /* Expires within seven days. */ }
   }
-  const [meet, gmail] = await Promise.all([
-    db.from("hf_meet_connections").select("company_id", { count: "exact", head: true }).eq("organizer", organizer).not("credentials", "is", null),
-    db.from("hf_gmail_connections").select("company_id", { count: "exact", head: true }).eq("mailbox", organizer).not("credentials", "is", null),
-  ]);
-  if (meet.error || gmail.error || meet.count || gmail.count) return;
-  try { await meetOAuth().revokeToken(openGmail<{ refresh_token: string }>(credentials).refresh_token); }
+  const others = await db.from("hf_google_connections").select("company_id", { count: "exact", head: true })
+    .eq("account", account).not("credentials", "is", null);
+  if (others.error || others.count) return;
+  try { await googleOAuth().revokeToken(openGmail<{ refresh_token: string }>(credentials).refresh_token); }
   catch { /* Already revoked. */ }
 }
