@@ -1332,8 +1332,7 @@ pre {
     padding: 36px 24px;
   }
   .app-shell {
-    display: block;
-    height: 100dvh;
+    flex-direction: column;
   }
   .sidebar {
     width: 100%;
@@ -1367,21 +1366,10 @@ pre {
     display: none;
   }
   .sidebar nav {
-    flex-direction: row;
-    grid-column: 1/-1;
-    gap: 8px;
-  }
-  .sidebar nav button {
-    padding: 9px 13px;
-    font-size: 0.8rem;
-    flex: 1;
-    justify-content: center;
-  }
-  .sidebar nav button span {
-    margin-left: 0;
+    display: none;
   }
   .main-workspace {
-    height: calc(100dvh - 139px);
+    min-height: 0;
   }
   .page-header {
     padding: 23px 18px 18px;
@@ -1940,6 +1928,81 @@ pre {
     min-height: 36px;
   }
   .scorecard-actions > span {
+    flex-basis: 100%;
+  }
+}
+
+/* Phones: pages move to a bottom tab bar; inputs stay at 16px so iOS does not zoom on focus. */
+.mobile-tabs {
+  display: none;
+}
+@media (max-width: 720px) {
+  .mobile-tabs {
+    display: flex;
+    position: relative;
+    flex-shrink: 0;
+    background: #fff;
+    border-top: 1px solid var(--line);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .mobile-tabs > button {
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+    padding: 7px 2px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font-size: 0.66rem;
+    font-weight: 600;
+  }
+  .mobile-tabs > button.active {
+    color: var(--blue);
+  }
+  .mobile-more {
+    position: absolute;
+    right: 8px;
+    bottom: calc(100% + 8px);
+    z-index: 30;
+    min-width: 210px;
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(13, 29, 49, 0.18);
+  }
+  .mobile-more button {
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 13px 12px;
+    border: 0;
+    background: none;
+    font-size: 0.9rem;
+  }
+  .mobile-more button.active {
+    color: var(--blue);
+    background: #f1f6ff;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  .board {
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 18px;
+  }
+  .stage {
+    flex-basis: calc(100vw - 60px);
+    scroll-snap-align: start;
+  }
+  .candidate-actions {
+    flex-wrap: wrap;
+  }
+  .candidate-actions select {
     flex-basis: 100%;
   }
 }

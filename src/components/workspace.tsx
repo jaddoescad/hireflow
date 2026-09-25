@@ -18,6 +18,7 @@ import {
   Undo2,
   Check,
   X,
+  Menu,
 } from "lucide-react";
 import { browserDb, configured } from "@/lib/supabase/client";
 import type {
@@ -62,6 +63,7 @@ export function Workspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("hiring");
+  const [more, setMore] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [edit, setEdit] = useState<Candidate | null | undefined>();
   const [newCompany, setNewCompany] = useState(false);
@@ -386,6 +388,21 @@ export function Workspace() {
         {companyModal}
       </div>
     );
+  const pages = [
+    { id: "hiring", label: "Hiring", Icon: LayoutDashboard },
+    { id: "calendar", label: "Calendar", Icon: CalendarDays },
+    { id: "recordings", label: "Recordings", Icon: Video },
+    { id: "metrics", label: "Metrics", Icon: BarChart3 },
+    { id: "team", label: "Team", Icon: Users },
+    ...(admin
+      ? [
+          { id: "settings", label: "Settings", Icon: SettingsIcon },
+          { id: "integrations", label: "Integrations", Icon: Plug },
+        ]
+      : []),
+  ];
+  // Phones show the first four pages as tabs and the rest under More.
+  const morePages = pages.slice(4);
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -427,47 +444,16 @@ export function Workspace() {
         </div>
         <span className="nav-label">WORKSPACE</span>
         <nav>
-          <button
-            className={view === "hiring" ? "active" : ""}
-            onClick={() => changeView("hiring")}
-          >
-            <LayoutDashboard size={19} /> Hiring{" "}
-            <span>{data.candidates.length}</span>
-          </button>
-          <button className={view === "calendar" ? "active" : ""} onClick={() => changeView("calendar")}>
-            <CalendarDays size={19} /> Calendar
-          </button>
-          <button className={view === "recordings" ? "active" : ""} onClick={() => changeView("recordings")}>
-            <Video size={19} /> Recordings
-          </button>
-          <button
-            className={view === "metrics" ? "active" : ""}
-            onClick={() => changeView("metrics")}
-          >
-            <BarChart3 size={19} /> Metrics
-          </button>
-          <button
-            className={view === "team" ? "active" : ""}
-            onClick={() => changeView("team")}
-          >
-            <Users size={19} /> Team
-          </button>
-          {admin && (
+          {pages.map(({ id, label, Icon }) => (
             <button
-              className={view === "settings" ? "active" : ""}
-              onClick={() => changeView("settings")}
+              key={id}
+              className={view === id ? "active" : ""}
+              onClick={() => changeView(id)}
             >
-              <SettingsIcon size={19} /> Settings
+              <Icon size={19} /> {label}
+              {id === "hiring" && <span>{data.candidates.length}</span>}
             </button>
-          )}
-          {admin && (
-            <button
-              className={view === "integrations" ? "active" : ""}
-              onClick={() => changeView("integrations")}
-            >
-              <Plug size={19} /> Integrations
-            </button>
-          )}
+          ))}
         </nav>
         <div className="sidebar-bottom">
           <div className="profile">
@@ -540,6 +526,48 @@ export function Workspace() {
           <RefreshCw size={15} />
         </button>
       </main>
+      <nav className="mobile-tabs" aria-label="Pages">
+        {pages.slice(0, 4).map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            className={view === id ? "active" : ""}
+            onClick={() => {
+              setMore(false);
+              changeView(id);
+            }}
+          >
+            <Icon size={21} />
+            {label}
+          </button>
+        ))}
+        <button
+          className={more || morePages.some((p) => p.id === view) ? "active" : ""}
+          aria-expanded={more}
+          onClick={() => setMore(!more)}
+        >
+          <Menu size={21} />
+          More
+        </button>
+        {more && (
+          <div className="mobile-more">
+            {morePages.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                className={view === id ? "active" : ""}
+                onClick={() => {
+                  setMore(false);
+                  changeView(id);
+                }}
+              >
+                <Icon size={18} /> {label}
+              </button>
+            ))}
+            <button onClick={() => void browserDb().auth.signOut()}>
+              <LogOut size={18} /> Sign out
+            </button>
+          </div>
+        )}
+      </nav>
       {moveNotice && moveNotice.companyId === data.company?.id && (
         <div className="move-toast">
           <span role="status" aria-live="polite">

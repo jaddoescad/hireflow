@@ -39,3 +39,12 @@
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
+/* Phones list the month's sessions instead of a seven-column grid. */
+@media (max-width: 720px) {
+  .interview-calendar-scroll {
+    display: none;
+  }
+  .interview-agenda {
+    margin-top: 12px;
+  }
+}
