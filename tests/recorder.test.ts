@@ -40,7 +40,7 @@ test("turning recording off, cancelling or losing the link cancels only booked r
   assert.deepEqual(planRecorder(session(60), visits, null, null, now), { cancel: ["bot-1"], create: null });
 });
 
-test("a recorder is sent to a meeting it has not visited, including one joined again after it left", () => {
+test("a recorder is sent when the first person joins, and again when a meeting is joined after it left", () => {
   const ended = visit({ state: "done", planned_start: at(-30), join_at: at(-31), status_at: at(-10) });
   // The meeting that began after the recorder's last update is a rejoin.
   assert.deepEqual(planRecorder(session(-30), [ended], link, at(-5), now), { cancel: [], create: { join_at: null, planned_start: at(-30) } });
@@ -54,9 +54,17 @@ test("a recorder is sent to a meeting it has not visited, including one joined a
   assert.deepEqual(planRecorder(session(-30), failures, link, at(-5), now), { cancel: [], create: null });
   // Past the window nothing new is sent.
   assert.deepEqual(planRecorder(session(-170), [ended], link, at(-5), now), { cancel: [], create: null });
-  // People joining before the start leave the booked recorder to arrive on time.
-  assert.deepEqual(planRecorder(session(14), [visit({ planned_start: at(14), join_at: at(13) })], link, at(-1), now), { cancel: [], create: null });
-  assert.deepEqual(planRecorder(session(0.5), [visit({ planned_start: at(0.5), join_at: at(-0.5) })], link, at(-5), now), { cancel: [], create: null });
+  // The first person to join, even before the start, gets a recorder right away instead of the booking.
+  assert.deepEqual(planRecorder(session(14), [visit({ planned_start: at(14), join_at: at(13) })], link, at(-1), now),
+    { cancel: ["bot-1"], create: { join_at: null, planned_start: at(14) } });
+  assert.deepEqual(planRecorder(session(14), [], link, at(-1), now), { cancel: [], create: { join_at: null, planned_start: at(14) } });
+  // Before the window opens nothing is sent; a booking about to arrive, or one already sent, is left alone.
+  assert.deepEqual(planRecorder(session(20), [visit({ planned_start: at(20), join_at: at(19) })], link, at(-1), now), { cancel: [], create: null });
+  assert.deepEqual(planRecorder(session(1.5), [visit({ planned_start: at(1.5), join_at: at(0.5) })], link, at(-5), now), { cancel: [], create: null });
+  assert.deepEqual(planRecorder(session(14), [visit({ planned_start: at(14), join_at: null, created_at: at(-1) })], link, at(-2), now), { cancel: [], create: null });
+  // One sent early and turned away is not replaced in the same meeting, and the booking is not recreated.
+  assert.deepEqual(planRecorder(session(5), [visit({ state: "failed", planned_start: at(5), join_at: null, created_at: at(-9), status_at: at(-1) })], link, at(-10), now),
+    { cancel: [], create: null });
 });
 
 test("Recall statuses map to recording states and team-facing reasons", () => {

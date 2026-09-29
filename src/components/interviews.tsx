@@ -135,7 +135,7 @@ export function Interviews({data,onRefresh}: {data:Workspace;onRefresh:()=>void}
         <h3>Recordings</h3>
         <p className="muted">{!session.auto_record?"Recording is off for this interview."
           :connection&&!connection.recorder?"The recorder is not set up on this server, so this interview will not be recorded."
-          :`${recorderName} asks to join at the start time. Let it in when you admit the candidate.`}</p>
+          :`${recorderName} asks to join as soon as someone joins the call. Let it in when you admit the candidate.`}</p>
         {session.recorder_error&&<p className="error">{session.recorder_error}</p>}
         {sessionRecordings.map(r=><div className="interview-recording" key={r.name}>
           <Video size={21}/><div><strong>{r.starts_at?dateLabel(r.starts_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):r.join_at?`Joins ${dateLabel(r.join_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}`:recorderName}</strong><small>{recordingStatus(r)}{r.error&&!r.storage_key?` · ${r.error}`:""}{r.storage_key&&r.starts_at&&r.ends_at?` · ${Math.max(1,Math.round((Date.parse(r.ends_at)-Date.parse(r.starts_at))/60000))} min`:""}</small></div>

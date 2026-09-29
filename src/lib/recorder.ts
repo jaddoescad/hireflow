@@ -44,10 +44,11 @@ export function recorderProblem(code: string, subCode?: string | null) {
 
 type Visit = Pick<Recording, "name" | "state" | "planned_start" | "join_at" | "created_at"> & { meet_url: string | null; status_at: string | null };
 export type RecorderPlan = { cancel: string[]; create: { join_at: string | null; planned_start: string } | null };
-// Decides which recorder visits to cancel and whether to send one. One visit is booked for the scheduled start;
-// a moved start or new link replaces it. From the start on, when people are in a meeting (liveSince is when it
-// began) that no recorder has visited, one is sent right away. That covers a meeting that ends and is joined
-// again, without re-sending to a meeting that refused the recorder or that Google has not marked ended yet.
+// Decides which recorder visits to cancel and whether to send one. One visit is booked for the scheduled start
+// as a backup; a moved start or new link replaces it. As soon as someone is in a meeting (liveSince is when it
+// began) that no recorder has visited, one is sent right away and a booking still more than a minute off is
+// replaced. That also covers a meeting that ends and is joined again, without re-sending to a meeting that
+// turned the recorder away or that Google has not marked ended yet.
 export function planRecorder(
   session: Pick<Interview, "starts_at" | "ends_at"> & { wanted: boolean },
   visits: Visit[], meetUrl: string | null, liveSince: string | null, now = Date.now(),
@@ -60,10 +61,15 @@ export function planRecorder(
   const kept = visits.filter(v => v.state !== "cancelled" && !cancel.includes(v.name));
   const create = { join_at: null as string | null, planned_start: session.starts_at };
   if (start > now && !kept.some(v => v.planned_start && Date.parse(v.planned_start) === start)) {
-    const join_at = recorderJoinAt(session.starts_at, now);
+    // Someone already in the meeting gets the recorder now rather than at the start.
+    const join_at = liveSince && recorderWindowOpen(session, now) ? null : recorderJoinAt(session.starts_at, now);
     if (join_at || recorderWindowOpen(session, now)) return { cancel, create: { ...create, join_at } };
   }
-  if (!liveSince || current || now < start - joinEarly || !recorderWindowOpen(session, now)) return { cancel, create: null };
+  if (!liveSince || !recorderWindowOpen(session, now)) return { cancel, create: null };
+  if (current) {
+    const arriving = !current.join_at || Date.parse(current.join_at) - now <= 60000;
+    return arriving ? { cancel, create: null } : { cancel: [...cancel, current.name], create };
+  }
   const since = Date.parse(liveSince);
   const visited = kept.some(v => recorderInCall(v.state) || Date.parse(v.created_at) >= since || (v.status_at && Date.parse(v.status_at) >= since));
   // The cap stops a meeting that keeps ending and restarting from drawing a recorder every few minutes.
