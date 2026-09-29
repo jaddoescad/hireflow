@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     }
     const profile = (await client.verifyIdToken({ idToken: tokens.id_token, audience: process.env.GOOGLE_CLIENT_ID })).getPayload();
     if (!profile?.email_verified || !profile.email) throw new Error("Unverified account");
-    // Meet recording and automatic artifacts require a Google Workspace account.
+    // Co-hosts and host controls for interview rooms require a Google Workspace account.
     if (!profile.hd) {
       destination.searchParams.set("google", "not-workspace");
       return NextResponse.redirect(destination);

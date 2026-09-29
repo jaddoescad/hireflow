@@ -2,16 +2,26 @@ import "server-only";
 import { adminDb } from "./supabase/server";
 import { openGmail } from "./gmail-crypto";
 import { googleOAuth } from "./google";
-import { googleMeetUrl, interviewCalendarTitle, interviewTitleFromCalendar, meetingWindowOpen, recordingUrl, type Interview } from "./interviews";
+import { googleMeetUrl, interviewCalendarTitle, interviewTitleFromCalendar, meetingWindowOpen, type Interview } from "./interviews";
 import { notifyInterviewOrganizer } from "./interview-notifications";
+import { scheduleRecorder } from "./recall";
+import { recordingStorageConfigured } from "./recording-storage";
+import { recorderName } from "./recorder";
 
 const eventsApi = "https://workspaceevents.googleapis.com/v1";
 export const meetEventTypes = [
   "google.workspace.meet.conference.v2.started",
   "google.workspace.meet.conference.v2.ended",
-  "google.workspace.meet.recording.v2.started",
-  "google.workspace.meet.recording.v2.fileGenerated",
 ];
+// Rooms HireFlow creates admit only their members (the interviewers, as co-hosts) directly. Candidates and the
+// recorder ask to join, and an interviewer lets them in.
+const roomConfig = {
+  accessType: "RESTRICTED", entryPointAccess: "ALL", moderation: "ON",
+  moderationRestrictions: {
+    chatRestriction: "NO_RESTRICTION", reactionRestriction: "NO_RESTRICTION",
+    presentRestriction: "NO_RESTRICTION", defaultJoinAsViewerType: "OFF",
+  },
+};
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 export function googleApi(credentials: string) {
   const client = googleOAuth(credentials);
@@ -30,10 +40,6 @@ type GoogleEvent = {
   extendedProperties?: { private?: Record<string,string> };
   conferenceData?: { createRequest?: { status?: { statusCode?: string } } };
 };
-type GoogleRecording = {
-  name: string; state: string; startTime?: string; endTime?: string;
-  driveDestination?: { file?: string; exportUri?: string };
-};
 type Page<K extends string, T> = { [key in K]?: T[] } & { nextPageToken?: string };
 function httpStatus(error: unknown) {
   return (error as { response?: { status?: number } })?.response?.status;
@@ -41,7 +47,10 @@ function httpStatus(error: unknown) {
 function authFailure(error: unknown) {
   return httpStatus(error) === 401 || String((error as Error)?.message).includes("invalid_grant");
 }
+// A problem with a specific explanation for the team.
+class SyncProblem extends Error {}
 export function meetError(error: unknown) {
+  if (error instanceof SyncProblem) return error.message;
   const code = httpStatus(error);
   if (authFailure(error)) return "Google authorization expired. An admin needs to reconnect Google in Integrations.";
   if (code === 403) return "Google denied access. Check Calendar and Meet API permissions, organizer access, and Workspace settings.";
@@ -147,7 +156,9 @@ async function syncSession(company: string, session: Interview, google: Google,
       try { await google(eventUrl + "?sendUpdates=all", "DELETE"); }
       catch (e) { if (![404, 410].includes(httpStatus(e) || 0)) throw e; }
     }
-    await commit(session, { sync: { status: "cancelled" }, observed: await observe(session, session.meet_space, google, deadline) });
+    const facts = await observe(session, session.meet_space, google, deadline);
+    await commit(session, { sync: { status: "cancelled" }, observed: facts?.saved });
+    await scheduleRecorder({ ...session, status: "cancelled" }, session.meet_url, null, recordingStorageConfigured());
     return;
   }
   if (!event && session.synced_version > 0) {
@@ -159,8 +170,31 @@ async function syncSession(company: string, session: Interview, google: Google,
     .eq("id", session.candidate_id).single();
   if (candidate.error) throw new Error("Could not load interview candidate.");
   const calendarTitle = interviewCalendarTitle(session.title, candidate.data.name);
+  // Interviews scheduled before HireFlow created its own rooms keep Calendar's Meet link, which lets invited
+  // guests straight in. A Meet link added later in Calendar does not replace HireFlow's room.
+  const legacy = !!event?.hangoutLink && (!session.meet_space || googleMeetUrl(event.hangoutLink) === session.meet_url);
+  let space = session.meet_space;
+  let meetUrl = legacy ? googleMeetUrl(event!.hangoutLink) : session.meet_url;
+  if (!legacy && !space) {
+    let room: { name: string; meetingUri?: string };
+    try { room = await google<{ name: string; meetingUri?: string }>("https://meet.googleapis.com/v2/spaces", "POST", { config: roomConfig }); }
+    catch (e) {
+      if (httpStatus(e) === 403 && !authFailure(e))
+        throw new SyncProblem("Google did not let HireFlow create the Meet room. An admin needs to reconnect Google in Integrations.");
+      throw e;
+    }
+    meetUrl = googleMeetUrl(room.meetingUri);
+    if (!meetUrl) throw new Error("Google returned an unexpected Meet link.");
+    space = room.name;
+    // Saved before the invitation goes out so a retry reuses this room. A newer edit is handled by its own sync.
+    if (!(await commit(session, { space: { name: space, meet_url: meetUrl } }))) return;
+  }
+  // Co-hosts are rechecked until they all succeed; one that fails does not hold back the invitation.
+  const hostProblem = !legacy && space && (pending || !session.synced_version || session.last_error)
+    ? await syncCohosts(company, session, space, google, deadline) : null;
   const body = {
     summary: calendarTitle,
+    ...(!legacy && meetUrl ? { location: meetUrl, description: invitationText(meetUrl, session.auto_record) } : {}),
     start: { dateTime: session.starts_at, timeZone: session.timezone },
     end: { dateTime: session.ends_at, timeZone: session.timezone },
     attendees: session.attendees.map(a => ({ email: a.email, responseStatus: known.get(a.email) || a.responseStatus || "needsAction" })),
@@ -169,10 +203,7 @@ async function syncSession(company: string, session: Interview, google: Google,
   };
   if (!event) {
     try {
-      event = await google<GoogleEvent>(base + "?conferenceDataVersion=1&sendUpdates=all", "POST", {
-        ...body, id: session.google_event_id,
-        conferenceData: { createRequest: { requestId: session.id, conferenceSolutionKey: { type: "hangoutsMeet" } } },
-      });
+      event = await google<GoogleEvent>(base + "?sendUpdates=all", "POST", { ...body, id: session.google_event_id });
     } catch (e) {
       if (httpStatus(e) !== 409) throw e;
       event = await google<GoogleEvent>(eventUrl);
@@ -188,48 +219,69 @@ async function syncSession(company: string, session: Interview, google: Google,
       extendedProperties: { private: { ...event.extendedProperties?.private, hireflow_candidate_title: "1" } },
     });
   }
-  const meetUrl = googleMeetUrl(event.hangoutLink);
-  if (!meetUrl) {
+  if (legacy && !meetUrl) {
     const failed = event.conferenceData?.createRequest?.status?.statusCode === "failure";
     await commit(session, { error: failed
       ? "Google could not create the Meet link. Check the organizer's Meet access and reconnect."
       : "Google is preparing the Meet link. It will appear after the next sync." });
     return;
   }
-  let space = session.meet_space;
-  let setup = session.recording_setup;
-  let setupError = session.recording_error;
-  if (!space || pending || setup === "pending" || setup === "failed") {
-    try {
-      space ||= (await google<{ name: string }>(`https://meet.googleapis.com/v2/spaces/${meetUrl.split("/").pop()}`)).name;
-      // Only the organizer can pre-configure artifacts. Keep transcription on and Gemini notes off.
-      await google(`https://meet.googleapis.com/v2/${space}?updateMask=config.artifactConfig.recordingConfig.autoRecordingGeneration,config.artifactConfig.transcriptionConfig.autoTranscriptionGeneration,config.artifactConfig.smartNotesConfig.autoSmartNotesGeneration`, "PATCH", {
-        config: { artifactConfig: {
-          recordingConfig: { autoRecordingGeneration: session.auto_record ? "ON" : "OFF" },
-          transcriptionConfig: { autoTranscriptionGeneration: "ON" },
-          smartNotesConfig: { autoSmartNotesGeneration: "OFF" },
-        } },
-      });
-      setup = session.auto_record ? "on" : "off";
-      setupError = null;
-    } catch (e) {
-      if (authFailure(e)) throw e;
-      setup = "failed";
-      setupError = "Automatic recording could not be configured. " + meetError(e);
-    }
+  if (legacy && !space && meetUrl) {
+    try { space = (await google<{ name: string }>(`https://meet.googleapis.com/v2/spaces/${meetUrl.split("/").pop()}`)).name; }
+    catch (e) { if (authFailure(e)) throw e; }
   }
   const attendees = (event.attendees || []).filter(a => a.email && !a.resource)
     .map(a => ({ email: a.email!.toLowerCase(), responseStatus: a.responseStatus || "needsAction" }));
-  await commit(session, {
+  const facts = await observe(session, space, google, deadline);
+  const fresh = await commit(session, {
     sync: { status: "scheduled", meet_url: meetUrl, meet_space: space,
       title: event.summary === calendarTitle ? session.title : event.summary ? interviewTitleFromCalendar(event.summary, candidate.data.name) : undefined,
-      attendees: attendees.length ? attendees : undefined, recording_setup: setup, recording_error: setupError,
+      attendees: attendees.length ? attendees : undefined,
       starts_at: event.start?.dateTime, ends_at: event.end?.dateTime },
-    observed: await observe(session, space, google, deadline),
+    observed: facts?.saved,
   });
+  if (!fresh) return;
+  if (hostProblem) await commit(session, { error: hostProblem });
+  await scheduleRecorder({ ...session, status: "scheduled",
+    starts_at: event.start?.dateTime || session.starts_at, ends_at: event.end?.dateTime || session.ends_at },
+  meetUrl, facts?.liveSince || null, recordingStorageConfigured());
 }
 
-// Conference records expire after 30 days, so the facts are saved as soon as they are seen.
+function invitationText(meetUrl: string, recorded: boolean) {
+  return [`Join Google Meet: ${meetUrl}`, "",
+    "Select \"Ask to join\" and your interviewer will let you in.",
+    ...(recorded ? ["", `This interview is recorded. ${recorderName} will also ask to join the call.`] : []),
+  ].join("\n");
+}
+
+// Interviewers become co-hosts of the room: they join directly and can let the candidate and recorder in.
+// Returns a problem to show when Google refuses someone.
+async function syncCohosts(company: string, session: Interview, space: string, google: Google, deadline: number) {
+  const db = adminDb();
+  const { data, error } = await db.from("hf_members").select("email").eq("company_id", company)
+    .in("user_id", session.interviewer_ids).eq("enabled", true);
+  if (error) throw new Error("Could not load interviewers.");
+  const wanted = new Set((data as { email: string }[]).map(m => m.email.toLowerCase()).filter(email => email !== session.organizer));
+  const members = await pages<"members", { name: string; email?: string }>(google, `https://meet.googleapis.com/v2/${space}/members`, "members", deadline);
+  for (const member of members)
+    if (!member.email || !wanted.has(member.email.toLowerCase())) await google(`https://meet.googleapis.com/v2/${member.name}`, "DELETE");
+  const current = new Set(members.map(m => m.email?.toLowerCase()));
+  const refused: string[] = [];
+  for (const email of wanted) {
+    if (current.has(email)) continue;
+    try { await google(`https://meet.googleapis.com/v2/${space}/members`, "POST", { email, role: "COHOST" }); }
+    catch (e) {
+      if (authFailure(e)) throw e;
+      const code = httpStatus(e);
+      if (code === 403) throw new SyncProblem("Google did not let HireFlow add co-hosts. An admin needs to reconnect Google in Integrations.");
+      if (code !== 400) throw e;
+      refused.push(email);
+    }
+  }
+  return refused.length ? `Invitations were sent, but Google could not make ${refused.join(", ")} a co-host, so they will have to ask to join and cannot let others in. Interviewers need a Google account.` : null;
+}
+
+// Conference records expire after 30 days, so start and end times are saved as soon as they are seen.
 // A failed check is omitted and retried on the next sync instead of blocking scheduling updates.
 async function observe(session: Interview, space: string | null, google: Google, deadline: number) {
   if (!space || !meetingWindowOpen(session)) return undefined;
@@ -241,26 +293,15 @@ async function meetingFacts(space: string, google: Google, deadline: number) {
     google, `https://meet.googleapis.com/v2/conferenceRecords?${new URLSearchParams({ filter: `space.name = "${space}"` })}`,
     "conferenceRecords", deadline);
   if (!conferences.length) return undefined;
-  const recordings = [];
-  for (const conference of conferences) {
-    const found = await pages<"recordings", GoogleRecording>(google,
-      `https://meet.googleapis.com/v2/${conference.name}/recordings`, "recordings", deadline);
-    recordings.push(...found.map(r => ({
-      name: r.name, conference: conference.name, state: r.state, starts_at: r.startTime || null, ends_at: r.endTime || null,
-      drive_file_id: r.driveDestination?.file || null,
-      playback_url: recordingUrl(r.driveDestination?.exportUri, r.driveDestination?.file),
-    })));
-  }
   const starts = conferences.map(c => c.startTime).filter(Boolean).sort();
-  const ended = conferences.every(c => c.endTime);
+  const liveSince = conferences.filter(c => !c.endTime).map(c => c.startTime || new Date().toISOString()).sort().at(-1);
   return {
-    started_at: starts[0] || null,
-    ended_at: ended ? conferences.map(c => c.endTime!).sort().at(-1) : null,
-    recordings,
+    liveSince,
+    saved: { started_at: starts[0] || null, ended_at: liveSince ? null : conferences.map(c => c.endTime!).sort().at(-1) },
   };
 }
 
-// Workspace Events push conference and recording changes; the scheduled sync remains the recovery path.
+// Workspace Events push meeting start and end; the scheduled sync remains the recovery path.
 async function renewEvents(connection: Connection, google: Google,
   commit: (session: Interview | null, payload: Record<string,unknown>) => Promise<boolean>, force: boolean) {
   const topic = process.env.MEET_EVENTS_TOPIC;
@@ -268,12 +309,17 @@ async function renewEvents(connection: Connection, google: Google,
   const expires = connection.events_expire_at ? Date.parse(connection.events_expire_at) : 0;
   if (!force && connection.events_subscription && expires - Date.now() > 2 * 86400000) return;
   const target = `//cloudidentity.googleapis.com/users/${connection.google_user}`;
-  type Subscription = { name: string; state?: string; expireTime?: string; notificationEndpoint?: { pubsubTopic?: string } };
+  type Subscription = { name: string; state?: string; expireTime?: string; eventTypes?: string[]; notificationEndpoint?: { pubsubTopic?: string } };
   try {
     let current: Subscription | null = null;
     if (connection.events_subscription) {
       try { current = await google<Subscription>(`${eventsApi}/${connection.events_subscription}`); }
       catch (e) { if (httpStatus(e) !== 404) throw e; }
+    }
+    // Subscriptions made for earlier event types are replaced.
+    if (current && [...(current.eventTypes || [])].sort().join() !== [...meetEventTypes].sort().join()) {
+      await google(`${eventsApi}/${current.name}`, "DELETE");
+      current = null;
     }
     if (current?.state === "SUSPENDED") await google(`${eventsApi}/${current.name}:reactivate`, "POST", {});
     else if (current) await google(`${eventsApi}/${current.name}?updateMask=ttl`, "PATCH", { ttl: "0s" });
@@ -300,7 +346,7 @@ async function renewEvents(connection: Connection, google: Google,
 }
 
 // Maps a Workspace event to its interview and syncs that session. Returns true when Google should redeliver.
-export async function handleMeetEvent(subscription: string, type: string, data: { conferenceRecord?: { name?: string }; recording?: { name?: string } }) {
+export async function handleMeetEvent(subscription: string, type: string, data: { conferenceRecord?: { name?: string } }) {
   const db = adminDb();
   const { data: connections, error } = await db.from("hf_meet_connections")
     .select("company_id,google:hf_google_connections!inner(credentials)")
@@ -312,7 +358,7 @@ export async function handleMeetEvent(subscription: string, type: string, data: 
       retry ||= (await syncMeet(connection.company_id, null, undefined, { budget: 50000, renewEvents: true })).state === "busy";
       continue;
     }
-    const conference = (data.conferenceRecord?.name || data.recording?.name || "").match(/^conferenceRecords\/[^/]+/)?.[0];
+    const conference = (data.conferenceRecord?.name || "").match(/^conferenceRecords\/[^/]+/)?.[0];
     if (!conference) continue;
     // One-to-one embed: PostgREST returns the connection row as an object.
     const { credentials } = connection.google as unknown as { credentials: string };

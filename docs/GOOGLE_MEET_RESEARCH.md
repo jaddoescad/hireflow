@@ -1,5 +1,7 @@
 # Google Meet integration: capabilities and implementation decisions
 
+> **Update (September 29, 2026):** HireFlow now follows the Meet-first path below (rooms created by HireFlow, interviewers as co-hosts, candidates ask to join) and no longer uses Meet recording, Drive copies or recording events. Interviews are recorded by a Recall.ai meeting bot; see [the integration guide](INTEGRATIONS.md#interview-recorder). The recording and playback sections below are kept as background.
+
 Research date: September 22, 2026. This is an architecture proposal based on current official Google documentation and a review of the unfinished HireFlow implementation. It is not a claim of successful live integration. Examples are synthetic.
 
 ## Recommendation

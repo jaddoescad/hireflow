@@ -21,7 +21,7 @@ export type Interview = {
   id: string; company_id: string; candidate_id: string; title: string;
   starts_at: string; ends_at: string; timezone: string; interviewer_ids: string[];
   attendees: { email: string; responseStatus?: string }[]; organizer: string;
-  auto_record: boolean; recording_setup: "pending" | "on" | "off" | "failed"; recording_error: string | null;
+  auto_record: boolean; recorder_error: string | null;
   status: "pending" | "scheduled" | "cancelled"; cancel_requested: boolean;
   version: number; synced_version: number; google_event_id: string;
   meet_url: string | null; meet_space: string | null;
@@ -64,15 +64,17 @@ export function interviewNotificationMessage(session: InterviewNotification) {
     ].join("\n"),
   };
 }
+export type RecordingState = "scheduled" | "joining" | "waiting" | "recording" | "processing" | "done" | "failed" | "cancelled";
+// One row per recorder visit. A rejoined meeting gets another visit, so one interview can have several parts.
 export type Recording = {
-  interview_id: string; name: string; conference: string; state: string; starts_at: string | null;
-  ends_at: string | null; drive_file_id: string | null; playback_url: string | null;
+  interview_id: string; name: string; state: RecordingState; planned_start: string | null; join_at: string | null;
+  starts_at: string | null; ends_at: string | null; error: string | null; created_at: string;
   storage_key: string | null; storage_error: string | null;
 };
 export type GoogleConnection = {
   connected: boolean; available: boolean; account: string | null;
   synced_at: string | null; last_error: string | null;
-  instant_updates: boolean; events_error: string | null;
+  instant_updates: boolean; events_error: string | null; recorder: boolean;
 };
 export function googleMeetUrl(value: string | undefined | null) {
   if (!value) return null;
@@ -81,23 +83,6 @@ export function googleMeetUrl(value: string | undefined | null) {
     return url.protocol === "https:" && url.hostname === "meet.google.com" &&
       /^\/[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(url.pathname) ? url.origin + url.pathname : null;
   } catch { return null; }
-}
-// Prefer Google's own playback link; fall back to the Drive viewer for the file.
-export function recordingUrl(exportUri: string | undefined, fileId: string | undefined) {
-  try {
-    const url = new URL(exportUri || "");
-    if (url.protocol === "https:" && url.hostname === "drive.google.com") return url.toString();
-  } catch { /* use the file ID */ }
-  return fileId && /^[a-zA-Z0-9_-]+$/.test(fileId)
-    ? `https://drive.google.com/file/d/${fileId}/view` : null;
-}
-// Drive's embeddable player; it plays only for Google accounts that can open the file.
-export function recordingPreviewUrl(fileId: string | null | undefined) {
-  return fileId && /^[a-zA-Z0-9_-]+$/.test(fileId) ? `https://drive.google.com/file/d/${fileId}/preview` : null;
-}
-// Drive's thumbnail image; like the player, it loads only for Google accounts that can open the file.
-export function recordingThumbnailUrl(fileId: string | null | undefined) {
-  return fileId && /^[a-zA-Z0-9_-]+$/.test(fileId) ? `https://lh3.googleusercontent.com/d/${fileId}=w640` : null;
 }
 // Joins in the 15 minutes before the start still belong to the interview.
 export function meetingWindowOpen(session: Pick<Interview, "starts_at">, now = Date.now()) {

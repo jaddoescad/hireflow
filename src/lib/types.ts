@@ -101,6 +101,7 @@ export type Workspace = {
     gmail_synced_at: string | null;
     gmail_error: string | null;
     recording_storage: boolean;
+    recorder_available: boolean;
     intake_configured: boolean;
     quo_configured: boolean;
     quo_phone: string | null;

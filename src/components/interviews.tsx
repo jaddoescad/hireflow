@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, RefreshCw, Play, ExternalLink } from "lucide-react";
 import type { Workspace } from "@/lib/types";
 import { interviewCalendarTitle, interviewLengths, localDateTime, localInterviewWindow, type Interview, type Recording, type GoogleConnection } from "@/lib/interviews";
+import { recorderName, recordingStatus } from "@/lib/recorder";
 import { Field, Modal } from "./primitives";
 import { GoogleResult } from "./integrations";
 import "./interviews.css";
@@ -62,7 +63,7 @@ export function Interviews({data,onRefresh}: {data:Workspace;onRefresh:()=>void}
   const session=sessions.find(s=>s.id===selected);
   const admin=data.membership?.role==="admin";
   const enabled=!!data.membership?.enabled;
-  const sessionRecordings=session?recordings.filter(r=>r.interview_id===session.id):[];
+  const sessionRecordings=session?recordings.filter(r=>r.interview_id===session.id&&r.state!=="cancelled"):[];
   return <section className="interviews-page">
     <header className="interviews-heading">
       <div><h1>Interviews</h1><p>Schedule conversations. Keep every session together.</p></div>
@@ -73,7 +74,7 @@ export function Interviews({data,onRefresh}: {data:Workspace;onRefresh:()=>void}
     <GoogleResult/>
     <div className="interview-connection">
       <div><Video size={18}/><span>{connection?.connected?<><strong>{connection.account}</strong><small>Invitations and Meet links come from this Google account{connection.instant_updates?" · Instant updates on":""}</small></>:
-        loaded?admin?"Connect your company's Google Workspace account to schedule interviews. It also imports candidate email and saves recordings for your team.":"Ask an admin to connect Google to schedule interviews.":"Checking Google connection…"}</span></div>
+        loaded?admin?"Connect your company's Google Workspace account to schedule interviews. It also imports candidate email.":"Ask an admin to connect Google to schedule interviews.":"Checking Google connection…"}</span></div>
       <div>
         {connection?.connected&&<button disabled={busy} onClick={()=>void sync()}><RefreshCw size={15}/> {busy?"Syncing…":"Sync now"}</button>}
         {admin&&connection&&!connection.connected&&<button className="primary" disabled={busy||!connection.available} onClick={async()=>{
@@ -102,7 +103,7 @@ export function Interviews({data,onRefresh}: {data:Workspace;onRefresh:()=>void}
               {s.meet_url&&s.status!=="cancelled"&&!s.cancel_requested
                 ?<a href={s.meet_url} target="_blank" rel="noreferrer" title={`Join ${calendarTitle(s)} in Google Meet`}><span>{dateLabel(s.starts_at,{hour:"numeric",minute:"2-digit"})}</span><strong>{calendarTitle(s)}</strong></a>
                 :<button onClick={()=>setSelected(s.id)}><span>{dateLabel(s.starts_at,{hour:"numeric",minute:"2-digit"})}</span><strong>{calendarTitle(s)}</strong></button>}
-              <button className="event-details" onClick={()=>setSelected(s.id)} aria-label={`Details and recordings for ${calendarTitle(s)}`}>Details{recordings.some(r=>r.interview_id===s.id&&r.playback_url)?" · Recording":""}</button>
+              <button className="event-details" onClick={()=>setSelected(s.id)} aria-label={`Details and recordings for ${calendarTitle(s)}`}>Details{recordings.some(r=>r.interview_id===s.id&&r.storage_key)?" · Recording":""}</button>
             </div>)}
           </div>;
         })}
@@ -132,15 +133,15 @@ export function Interviews({data,onRefresh}: {data:Workspace;onRefresh:()=>void}
           <button disabled={busy||!connection?.connected} onClick={()=>void sync(session.id)}><RefreshCw size={15}/> Refresh session</button>
         </div>
         <h3>Recordings</h3>
-        <p className="muted">{session.recording_setup==="on"?`Recording starts automatically when ${session.organizer} joins from a web browser.`:session.recording_setup==="off"?"Automatic recording is off. Record manually in Google Meet.":session.recording_setup==="pending"?"Recording setup pending.":"Start recording manually in Google Meet."}</p>
-        {session.recording_error&&<p className="error">{session.recording_error}</p>}
+        <p className="muted">{!session.auto_record?"Recording is off for this interview."
+          :connection&&!connection.recorder?"The recorder is not set up on this server, so this interview will not be recorded."
+          :`${recorderName} asks to join at the start time. Let it in when you admit the candidate.`}</p>
+        {session.recorder_error&&<p className="error">{session.recorder_error}</p>}
         {sessionRecordings.map(r=><div className="interview-recording" key={r.name}>
-          <Video size={21}/><div><strong>{r.starts_at?dateLabel(r.starts_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"Meeting recording"}</strong><small>{r.storage_key?"Saved for your team":r.state==="FILE_GENERATED"?"Available in Google Drive":r.state==="STARTED"?"Recording in progress":"Processing in Google"}{r.starts_at&&r.ends_at?` · ${Math.max(1,Math.round((Date.parse(r.ends_at)-Date.parse(r.starts_at))/60000))} min`:""}</small></div>
-          {r.storage_key?<a href={`/?company=${cid}&view=recordings`}><Play size={15}/> Watch recording</a>
-            :r.playback_url&&<a href={r.playback_url} target="_blank" rel="noreferrer"><Play size={15}/> Watch in Drive</a>}
+          <Video size={21}/><div><strong>{r.starts_at?dateLabel(r.starts_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):r.join_at?`Joins ${dateLabel(r.join_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}`:recorderName}</strong><small>{recordingStatus(r)}{r.error&&!r.storage_key?` · ${r.error}`:""}{r.storage_key&&r.starts_at&&r.ends_at?` · ${Math.max(1,Math.round((Date.parse(r.ends_at)-Date.parse(r.starts_at))/60000))} min`:""}</small></div>
+          {r.storage_key&&<a href={`/?company=${cid}&view=recordings`}><Play size={15}/> Watch recording</a>}
         </div>)}
-        {!sessionRecordings.length&&<p>{session.meeting_ended_at?"No recording was made for this meeting.":"No recording yet. Recordings appear here after Google processes them."}</p>}
-        {sessionRecordings.some(r=>!r.storage_key)&&<small>Recordings not yet saved to HireFlow play from the organizer&apos;s Google Drive.</small>}
+        {!sessionRecordings.length&&<p>{session.meeting_ended_at?"No recording was made for this meeting.":"No recording yet."}</p>}
         {session.status!=="cancelled"&&!session.cancel_requested&&<button className="danger" disabled={busy||!connection?.connected} onClick={async()=>{
           if(!confirm("Cancel this interview and notify all invited participants?")) return;
           setBusy(true);try {await json("/api/interviews",{company_id:cid,payload:{id:session.id,version:session.version,cancel:true}});await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}
@@ -188,8 +189,8 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
       <Field label="Length"><select name="length" defaultValue={length}>{[...new Set([...interviewLengths,length])].sort((a,b)=>a-b).map(m=><option key={m} value={m}>{m<60?`${m} min`:`${m/60} hr`}</option>)}</select></Field></div>
     <small className="interview-timezone">{timezone}</small>
     <fieldset className="interviewer-picker"><legend>Internal interviewers</legend>{data.members.filter(m=>m.enabled).map(m=><label key={m.user_id}><input type="checkbox" checked={members.includes(m.user_id)} onChange={e=>setMembers(e.target.checked?[...members,m.user_id]:members.filter(id=>id!==m.user_id))}/><span>{m.email}</span></label>)}</fieldset>
-    <label className="interview-checkbox"><input type="checkbox" name="auto_record" defaultChecked={session?.auto_record??true}/> Automatically record this interview</label>
-    <p className="muted">Requires eligible Google Workspace recording access. Google notifies participants when recording starts. Google emails invitations and changes to guests. HireFlow also emails a confirmation to the connected organizer.</p>
+    <label className="interview-checkbox"><input type="checkbox" name="auto_record" defaultChecked={session?.auto_record??true}/> Record with {recorderName}</label>
+    <p className="muted">Interviewers join directly. The candidate asks to join and an interviewer lets them in; {recorderName} asks to join the same way. Google emails invitations and changes to guests, and HireFlow emails a confirmation to the connected organizer.</p>
     {error&&<p className="error" role="alert">{error}</p>}
     {duplicate&&<p className="error" role="alert">{data.candidates.find(c=>c.id===candidate)?.name||"This candidate"} already has an interview {new Date(duplicate).toLocaleString(undefined,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}. Check the Calendar before booking again, or schedule another if this is a new round.</p>}
     <footer className="form-actions"><button type="button" onClick={onClose}>Back</button><button className="primary" disabled={busy||members.length===0}>{busy?"Saving…":duplicate?"Schedule another anyway":session?"Save & notify guests":"Schedule & send invitations"}</button></footer>
