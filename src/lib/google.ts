@@ -3,14 +3,14 @@ import { OAuth2Client } from "google-auth-library";
 import { sessionDb } from "./supabase/server";
 import { openGmail } from "./gmail-crypto";
 
-// One grant per company covers email import, interview scheduling and recording copies.
+// One grant per company covers email import and interview scheduling: HireFlow creates each Meet room, makes
+// the interviewers co-hosts and reads when meetings start and end.
 export const googleScopes = [
   "openid", "email",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/calendar.events.owned",
+  "https://www.googleapis.com/auth/meetings.space.created",
   "https://www.googleapis.com/auth/meetings.space.readonly",
-  "https://www.googleapis.com/auth/meetings.space.settings",
-  "https://www.googleapis.com/auth/drive.meet.readonly",
 ];
 export function googleAvailable() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GMAIL_TOKEN_KEY);

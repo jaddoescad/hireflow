@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Link2, Phone, Copy, Check, Mail } from "lucide-react";
+import { Link2, Phone, Copy, Check, Mail, Video } from "lucide-react";
+import { recorderName } from "@/lib/recorder";
 import type { Workspace } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
 import { Field, when } from "./primitives";
@@ -15,9 +16,9 @@ export function GoogleResult() {
   ) : (
     <p className="error">
       {result === "not-workspace"
-        ? "Connect a Google Workspace account. Meet recording is not available for personal Google accounts."
+        ? "Connect a Google Workspace account. Meet co-hosts are not available for personal Google accounts."
         : result === "permissions"
-          ? "Google wasn't connected. Allow every requested permission so email, interviews and recordings work."
+          ? "Google wasn't connected. Allow every requested permission so email and interviews work."
           : "Google wasn't connected. Try again."}
     </p>
   );
@@ -37,7 +38,7 @@ export function Integrations({
   const [copied, setCopied] = useState(false);
   const base = typeof window === "undefined" ? "" : location.origin;
   async function googleAction(action: "connect" | "sync" | "disconnect") {
-    if (action === "disconnect" && !confirm("Disconnect Google? Email import, interview scheduling and recording copies stop until an admin reconnects. Saved emails and recordings stay."))
+    if (action === "disconnect" && !confirm("Disconnect Google? Email import and interview scheduling stop until an admin reconnects. Saved emails and recordings stay."))
       return;
     setBusy(true);
     setError("");
@@ -94,8 +95,8 @@ export function Integrations({
           <div className="panel-form">
             <p>
               One company account for hiring. Candidate emails and resumes
-              arrive in Chat, interviews are sent from its calendar with a Meet
-              link, and recordings are saved for everyone on your team.
+              arrive in Chat, and interviews are sent from its calendar with a
+              Meet link. Candidates ask to join, and interviewers let them in.
             </p>
             {data.integration?.google_connected ? (
               <>
@@ -109,12 +110,6 @@ export function Integrations({
                 </p>
                 {data.integration.gmail_error && (
                   <p className="error">{data.integration.gmail_error}</p>
-                )}
-                {!data.integration.recording_storage && (
-                  <p className="muted">
-                    Recording storage is not set up on this server, so
-                    recordings stay in this account&apos;s Google Drive.
-                  </p>
                 )}
                 <div className="gmail-actions">
                   <button disabled={busy} onClick={() => void googleAction("sync")}>
@@ -131,9 +126,9 @@ export function Integrations({
             ) : (
               <>
                 <p className="muted">
-                  Use a Google Workspace account with Meet recording, such as
-                  your hiring inbox. HireFlow reads email, manages interview
-                  events and copies Meet recordings. It never sends email.
+                  Use a Google Workspace account, such as your hiring inbox.
+                  HireFlow reads email, manages interview events and creates
+                  their Meet rooms. It never sends email.
                 </p>
                 <button
                   className="primary"
@@ -150,6 +145,38 @@ export function Integrations({
               </>
             )}
             <GoogleResult />
+          </div>
+        </section>
+        <section className="panel">
+          <div className="panel-heading">
+            <h2>
+              <Video size={18} /> Interview recorder
+            </h2>
+            <span
+              className={`status ${data.integration?.recorder_available && data.integration.recording_storage ? "enabled" : "disabled"}`}
+            >
+              {data.integration?.recorder_available && data.integration.recording_storage
+                ? "Ready"
+                : "Not set up"}
+            </span>
+          </div>
+          <div className="panel-form">
+            <p>
+              {recorderName} asks to join each interview that has recording on.
+              After an interviewer lets it in, the video is saved to HireFlow
+              for everyone on your team.
+            </p>
+            {!data.integration?.recorder_available ? (
+              <p className="muted">
+                The workspace owner needs to add a Recall.ai API key on the
+                server.
+              </p>
+            ) : !data.integration.recording_storage && (
+              <p className="muted">
+                Recording storage is not set up on this server, so videos
+                cannot be saved yet.
+              </p>
+            )}
           </div>
         </section>
         <section className="panel">

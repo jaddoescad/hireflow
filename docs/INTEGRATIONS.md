@@ -39,20 +39,21 @@ Configure Supabase Auth's email provider separately for account confirmation and
 
 ## Google Workspace
 
-Each company connects one Google Workspace account in **Integrations → Google Workspace** (or from the Calendar page), typically its hiring inbox. That single account powers email import, interview scheduling and recordings:
+Each company connects one Google Workspace account in **Integrations → Google Workspace** (or from the Calendar page), typically its hiring inbox. That single account powers email import and interview scheduling:
 
 - **Email:** incoming and sent messages are imported into Chat.
-- **Interviews:** the Calendar view creates Google Calendar events with a Meet link on the account's calendar and invites the candidate and selected teammates.
-- **Recordings:** Meet saves recordings to the account's Drive, and HireFlow copies each one into private storage so every enabled member of the company can watch it, in any browser, without Drive sharing.
+- **Interviews:** HireFlow creates a Meet room for each interview, then a Google Calendar event on the account's calendar that invites the candidate and selected teammates with the room's link.
 
-The account must be a Google Workspace user whose edition allows Meet recording (for example Business Standard), with recording allowed by the administrator. Personal Google accounts are rejected. HireFlow reads email but never sends it.
+Recordings come from a separate meeting bot; see [Interview recorder](#interview-recorder).
+
+The account must be a Google Workspace user whose edition supports Meet co-hosts and host management (for example Business Standard). Personal Google accounts are rejected. HireFlow reads email but never sends it.
 
 ### Server setup
 
-1. Create a dedicated Google Cloud project and configure Google Auth Platform. Enable the Gmail API, Google Calendar API, Google Meet REST API and Google Drive API. Create an OAuth client of type **Web application** with the exact redirect URI `https://YOUR_APP_HOST/api/google/callback`.
-2. Add these scopes to the consent screen: `openid`, `email`, `gmail.readonly`, `calendar.events.owned`, `meetings.space.readonly`, `meetings.space.settings` and `drive.meet.readonly` (read-only access to files Meet created). `gmail.readonly` and `drive.meet.readonly` are restricted scopes. With an **Internal** audience no Google review is needed, which suits a deployment used only by its own Workspace organization. An External audience requires Google verification (and possibly a security assessment) before public use; apps left in Testing get seven-day refresh grants, so do not treat Testing as a permanent connection.
+1. Create a dedicated Google Cloud project and configure Google Auth Platform. Enable the Gmail API, Google Calendar API and Google Meet REST API. Create an OAuth client of type **Web application** with the exact redirect URI `https://YOUR_APP_HOST/api/google/callback`.
+2. Add these scopes to the consent screen: `openid`, `email`, `gmail.readonly`, `calendar.events.owned`, `meetings.space.created` (create interview rooms and add co-hosts) and `meetings.space.readonly` (see when meetings start and end). `gmail.readonly` is a restricted scope. With an **Internal** audience no Google review is needed, which suits a deployment used only by its own Workspace organization. An External audience requires Google verification (and possibly a security assessment) before public use; apps left in Testing get seven-day refresh grants, so do not treat Testing as a permanent connection.
 3. Set server-only `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_TOKEN_KEY` (a cryptographically random 32-byte key encoded as base64), and `CRON_SECRET` (a separate random secret). Set `APP_URL` to the canonical deployment origin. Keep the encryption key stable across deployments; replacing it makes saved grants unreadable and requires reconnection.
-4. Apply migrations, including the private `hf-mail-attachments` and `hf-recordings` buckets and the server-only connection tables. Do not add public storage policies.
+4. Apply migrations, including the private `hf-mail-attachments` and `hf-recordings` buckets and the server-only connection tables. Do not add public storage policies. Companies connected before interview rooms were created by HireFlow must reconnect Google once to grant `meetings.space.created`; until then, scheduling shows a reconnect message.
 5. Deploy. `vercel.json` schedules `/api/cron/gmail`, `/api/cron/meet` and `/api/cron/recordings` every five minutes; this requires a Vercel plan that supports that frequency and function duration. For other hosting, call each endpoint with `Authorization: Bearer <CRON_SECRET>` from your scheduler.
 6. An admin clicks **Connect Google** and chooses the account on Google's consent screen. The connected address is shown afterwards, and the first email import and calendar sync start immediately.
 
@@ -68,13 +69,32 @@ Ordinary incoming mail matches the sender. To associate a trusted form-notificat
 
 ### Interviews
 
-Recording starts automatically only after the organizer joins from a web browser; HireFlow cannot start or stop recording. HireFlow enables automatic transcription and turns off Gemini notes when configuring the meeting. The candidate is never given recording access.
+HireFlow creates each interview's Meet room itself with host management on and access restricted to the room's members. The selected interviewers are added as co-hosts, so they join directly and can admit people. The candidate is invited through Google Calendar with the link in the event's location and description, but is not a room member: they select **Ask to join** and an interviewer lets them in. The same applies to anyone else with the link, including the recorder. Interviewers need a Google account; if Google cannot make someone a co-host, the session shows why and retries after the address is fixed.
+
+Interviews scheduled before this change keep the Meet link Google Calendar created for them, where invited guests join directly. They also get the recorder. If Google recording was turned on for them, Google may still record to the organizer's Drive when the organizer joins; HireFlow no longer lists those files, so stop that recording in Meet if you don't want a second copy.
 
 - Calendar titles include the candidate name, for example `Interview — Alex Example`, in HireFlow and Google Calendar. Existing upcoming Google events gain the name on their next sync without another guest invitation.
 - Configure `SMTP_*` to send the connected account a separate confirmation after scheduling, edits and cancellations. It contains the candidate name, both dates/times, the scheduling time zone and the Meet link. Guest invitations still come from Google. Email failures appear in session details and retry on the scheduled sync; successful delivery is tracked per interview revision. SMTP delivery is at-least-once: a process failure after SMTP acceptance but before acknowledgement can cause a duplicate; retries keep the same Message-ID. Deployment does not send confirmations for already-synced historical revisions.
-- Each session's scheduling is synced separately from its recording setup and from each recording (in progress, processing, available). Google deletes conference records 30 days after a meeting, so HireFlow saves recording details as soon as it sees them. The scheduled sync collects recordings until three days after each interview.
+- Each session's scheduling is synced separately from its recorder visits. Google deletes conference records 30 days after a meeting, so HireFlow saves meeting start and end times as soon as it sees them.
 - Changes made directly in Google Calendar (time, title, cancellation) flow back into HireFlow. A HireFlow edit sends updated invitations. Google may ask guests to RSVP again after a time change; HireFlow shows Google's latest response.
 - A queued change runs only while its author and every selected interviewer are still enabled members. Outcomes that belong to an older revision are discarded.
+
+## Interview recorder
+
+Interviews with **Record with HireFlow Recorder** checked are recorded by a [Recall.ai](https://www.recall.ai) meeting bot named HireFlow Recorder, instead of Google Meet's own recorder. It needs no Google recording license and works for every Meet room.
+
+- **Joining:** the recorder is sent as soon as the first person joins the meeting, from 15 minutes before the start. With [instant updates](#instant-updates-optional) it is on its way within seconds (it takes about 10–30 seconds to arrive); without them, within five minutes. As a backup, one is also booked to arrive one minute before the start, and is cancelled once the first-join recorder is sent. Moving the interview, changing its link, turning recording off or cancelling replaces or cancels the booking.
+- **Admission:** the recorder asks to join like a guest. An interviewer lets it in when admitting the candidate. It waits up to 30 minutes to be admitted.
+- **Leaving and rejoining:** the recorder leaves 10 minutes after everyone else has left, or 10 minutes after joining if nobody else is there. If the meeting ends and people join again within 2 hours of the scheduled end, another recorder is sent, at most five per interview. A meeting that turned the recorder away (for example, it was not let in during early prep) does not get another until it ends and is joined again. Each visit is saved as a separate recording.
+- **Saving:** when a visit ends, its video is copied into private recording storage, and HireFlow then asks Recall to delete its copy. No recorder is booked while recording storage is not configured. Every enabled member can watch it in Recordings, on the candidate and in the session details. Visits that were never let in show the reason.
+
+### Setup
+
+1. Create a Recall.ai account in the region you want (for example US East) and an API key. Set server-only `RECALL_API_KEY` and `RECALL_API_URL` to the region's base URL, for example `https://us-east-1.recall.ai`.
+2. In the Recall dashboard, add a webhook endpoint `https://YOUR_APP_HOST/api/recall/events` for bot status events and set `RECALL_WEBHOOK_SECRET` to its signing secret (`whsec_…`). Without it, statuses and new videos still arrive through the five-minute `/api/cron/recordings` job, just more slowly.
+3. Configure recording storage (below) so videos can be saved.
+
+Integrations shows **Interview recorder: Ready** once the key and storage are configured. Webhook requests with a missing or wrong signature are rejected; a visit's status only moves forward and only within the company recorded on the bot.
 
 ### Recording storage
 
@@ -84,13 +104,13 @@ Recordings are copied through the S3 protocol, so any S3-compatible store works.
 2. Raise the **Global file size limit** above your longest expected recording (paid plans allow up to 500 GB).
 3. Set server-only `RECORDING_STORAGE_ENDPOINT` (`https://PROJECT_REF.storage.supabase.co/storage/v1/s3`), `RECORDING_STORAGE_REGION` (the project's region, for example `ca-central-1`), `RECORDING_STORAGE_BUCKET=hf-recordings`, `RECORDING_STORAGE_ACCESS_KEY_ID` and `RECORDING_STORAGE_SECRET_ACCESS_KEY`.
 
-`/api/cron/recordings` copies finished recordings from the organizer's Drive, streaming in 16 MB parts without buffering the whole video. Each recording is claimed for 20 minutes; failures are shown on the recording and retried up to five times. Deleting an interview, candidate or company queues its saved videos, and the same job deletes them from storage. Until a recording is saved, it plays from Drive for viewers whose Google account can open it. Without storage settings, recordings stay in Drive only.
+`/api/cron/recordings` checks recorders whose status has not changed for 10 minutes, cancels recorders of deleted interviews, and copies finished videos from Recall, streaming in 16 MB parts without buffering the whole video. Each recording is claimed for 20 minutes; failures are shown on the recording and retried up to five times. Deleting an interview, candidate or company queues its saved videos, and the same job deletes them from storage.
 
 To move to another provider such as Cloudflare R2, create a private bucket there, copy the objects with the same keys (for example with `rclone`), and change the five `RECORDING_STORAGE_*` settings. No database change is needed.
 
 ### Instant updates (optional)
 
-Without this, new recordings and meeting start/end times appear within about five minutes. With it, Google notifies HireFlow as soon as a meeting starts or ends and as soon as a recording is ready.
+Without this, meeting start/end times appear, and a recorder is sent to a rejoined meeting, within about five minutes. With it, Google notifies HireFlow as soon as a meeting starts or ends.
 
 1. Enable the Google Workspace Events API and Pub/Sub in the same project (Pub/Sub needs a billing account). Create a topic and grant `meet-api-event-push@system.gserviceaccount.com` the **Pub/Sub Publisher** role on it.
 2. Create a service account for push authentication. Create a push subscription on the topic with endpoint `https://YOUR_APP_HOST/api/meet/events`, authentication enabled with that service account, audience equal to the endpoint URL, and an acknowledgement deadline of 60 seconds.
@@ -98,4 +118,4 @@ Without this, new recordings and meeting start/end times appear within about fiv
 
 ### Verification
 
-Run `npm test` and `npm run typecheck`. `scripts/verify-meet.sql` checks tenant isolation, admin-only connection, membership rules, RSVP preservation, exclusive leases, stale-result rejection, recording ownership, recording copy claims, cancellation, account switching, email import checkpoints, past-session corrections, disabled members, disconnect invalidation and storage cleanup. It uses synthetic records inside a transaction that is rolled back; run it with `psql` or the Supabase SQL editor. Against a running local app, `APP_URL=http://localhost:3101 node --env-file=.env.local --import tsx scripts/verify-gmail.ts` verifies company isolation, disabled-member access, private resume downloads, matching, manual linking, duplicate imports and disconnect invalidation; it removes its own synthetic records and files. Before claiming the integration is live, connect the real account and check an email import, invitations, RSVP, a time change, a cancellation, and a short recorded call from start to playback by a second team member.
+Run `npm test` and `npm run typecheck`. `scripts/verify-meet.sql` checks tenant isolation, admin-only connection, membership rules, RSVP preservation, exclusive leases, stale-result rejection, Meet room persistence, recorder status ordering and ownership, recording copy claims, recorder cancellation on deletion, cancellation, account switching, email import checkpoints, past-session corrections, disabled members, disconnect invalidation and storage cleanup. It uses synthetic records inside a transaction that is rolled back; run it with `psql` or the Supabase SQL editor. Against a running local app, `APP_URL=http://localhost:3101 node --env-file=.env.local --import tsx scripts/verify-gmail.ts` verifies company isolation, disabled-member access, private resume downloads, matching, manual linking, duplicate imports and disconnect invalidation; it removes its own synthetic records and files. Before claiming the integration is live, connect the real account and check an email import, invitations, RSVP, a time change, a cancellation, and a short recorded call from start to playback by a second team member: the candidate should have to ask to join, and the recorder should arrive, be admitted, and its video play for a second team member.

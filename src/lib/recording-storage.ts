@@ -4,7 +4,7 @@ import { DeleteObjectsCommand, DeleteObjectCommand, GetObjectCommand, S3Client }
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { adminDb } from "./supabase/server";
-import { googleOAuth } from "./google";
+import { cancelDeletedRecorders, deleteBotMedia, getBot, reconcileRecorders } from "./recall";
 
 // Any S3-compatible store works (Supabase Storage today). Moving providers only changes these settings
 // and copies the objects; the database stores keys, never provider URLs.
@@ -24,45 +24,46 @@ export async function recordingPlaybackUrl(key: string) {
 }
 
 class CopyError extends Error {}
-type Claim = { company_id: string; name: string; interview_id: string; drive_file_id: string; credentials: string };
-function driveError(status: number) {
-  return new CopyError(
-    status === 401 ? "Google authorization expired. Reconnect Google in Integrations to save recordings." :
-    status === 403 ? "Google Drive denied access. Reconnect Google in Integrations and allow access to Meet recordings." :
-    status === 404 ? "The recording is no longer in Google Drive." :
-    "Could not copy the recording from Google Drive. HireFlow will retry.");
-}
+class NothingRecorded extends Error {}
+type Claim = { company_id: string; name: string; interview_id: string; error: string | null };
 
-// Streams one recording from Drive into storage without buffering the whole video.
+// Streams one finished recording from Recall into storage without buffering the whole video, then asks Recall
+// to delete its copy.
 async function copy(row: Claim, deadline: number) {
   const s3 = store()!;
   const db = adminDb();
-  const { token } = await googleOAuth(row.credentials).getAccessToken();
-  const drive = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(row.drive_file_id)}`;
-  const headers = { Authorization: `Bearer ${token}` };
+  const media = (await getBot(row.name)).recordings?.find(r => r.media_shortcuts?.video_mixed);
+  const video = media?.media_shortcuts?.video_mixed;
+  if (!media || !video || video.status?.code === "failed") throw new NothingRecorded();
+  const source = video.data?.download_url;
+  if (!source) throw new CopyError("Recall is still preparing the video. HireFlow will retry.");
   const abort = AbortSignal.timeout(Math.max(deadline - Date.now(), 1000));
-  const meta = await fetch(`${drive}?fields=size,mimeType`, { headers, signal: abort });
-  if (!meta.ok) throw driveError(meta.status);
-  const { size, mimeType } = await meta.json() as { size?: string; mimeType?: string };
-  const media = await fetch(`${drive}?alt=media`, { headers, signal: abort });
-  if (!media.ok || !media.body) throw driveError(media.status);
+  const download = await fetch(source, { signal: abort });
+  if (!download.ok || !download.body) throw new CopyError("Could not download the recording from Recall. HireFlow will retry.");
+  const size = Number(download.headers.get("content-length")) || null;
   const key = `${row.company_id}/${row.interview_id}/${row.name.replace(/[^A-Za-z0-9_-]/g, "_")}.mp4`;
   const upload = new Upload({
     client: s3.client, partSize: 16 * 1024 * 1024, queueSize: 4,
-    params: { Bucket: s3.bucket, Key: key, Body: Readable.fromWeb(media.body as never), ContentType: mimeType || "video/mp4" },
+    params: { Bucket: s3.bucket, Key: key, Body: Readable.fromWeb(download.body as never), ContentType: "video/mp4" },
   });
   abort.addEventListener("abort", () => void upload.abort());
   await upload.done();
   const saved = await db.from("hf_interview_recordings")
-    .update({ storage_key: key, storage_size: size ? Number(size) : null, stored_at: new Date().toISOString(), storage_error: null, storage_claim_until: null })
+    .update({
+      storage_key: key, storage_size: size, stored_at: new Date().toISOString(), storage_error: null, storage_claim_until: null,
+      ...(media.started_at ? { starts_at: media.started_at } : {}), ...(media.completed_at ? { ends_at: media.completed_at } : {}),
+    })
     .eq("company_id", row.company_id).eq("name", row.name).is("storage_key", null).select("name");
   // The interview was deleted while copying, so its object has no owner.
   if (!saved.error && !saved.data.length) await s3.client.send(new DeleteObjectCommand({ Bucket: s3.bucket, Key: key }));
   if (saved.error) throw new Error("Could not record the saved copy.");
+  await deleteBotMedia(row.name).catch(() => { /* Recall removes it when its retention ends. */ });
 }
 
 export async function storeRecordings(deadline: number) {
-  if (!store()) return { stored: 0, failed: 0, removed: 0 };
+  const cancelled = await cancelDeletedRecorders(deadline - 200000);
+  const checked = await reconcileRecorders(deadline - 150000);
+  if (!store()) return { checked, cancelled, stored: 0, failed: 0, removed: 0 };
   const db = adminDb();
   let stored = 0, failed = 0;
   while (Date.now() < deadline - 60000) {
@@ -73,15 +74,17 @@ export async function storeRecordings(deadline: number) {
     try { await copy(row, deadline - 10000); stored++; }
     catch (e) {
       failed++;
-      await db.from("hf_interview_recordings").update({
-        storage_error: e instanceof CopyError ? e.message
-          : e instanceof Error && ["AbortError", "TimeoutError"].includes(e.name) ? "Copying took too long. HireFlow will retry."
-          : "Could not save the recording. HireFlow will retry.",
-        storage_claim_until: null,
-      }).eq("company_id", row.company_id).eq("name", row.name);
+      await db.from("hf_interview_recordings").update(e instanceof NothingRecorded
+        ? { state: "failed", error: row.error || "Nothing was recorded.", storage_claim_until: null }
+        : {
+          storage_error: e instanceof CopyError ? e.message
+            : e instanceof Error && ["AbortError", "TimeoutError"].includes(e.name) ? "Copying took too long. HireFlow will retry."
+            : "Could not save the recording. HireFlow will retry.",
+          storage_claim_until: null,
+        }).eq("company_id", row.company_id).eq("name", row.name);
     }
   }
-  return { stored, failed, removed: await removeDeleted() };
+  return { checked, cancelled, stored, failed, removed: await removeDeleted() };
 }
 
 async function removeDeleted() {

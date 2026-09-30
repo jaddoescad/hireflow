@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sessionDb, adminDb } from "@/lib/supabase/server";
 import { googleAvailable } from "@/lib/google";
 import { recordingStorageConfigured } from "@/lib/recording-storage";
+import { recorderAvailable } from "@/lib/recall";
 import { failure } from "@/lib/http";
 import { z } from "zod";
 import { allCandidates } from "@/lib/candidates";
@@ -102,6 +103,7 @@ export async function GET(request: Request) {
         gmail_synced_at: gmail.data?.synced_at || null,
         gmail_error: gmail.data?.last_error || null,
         recording_storage: recordingStorageConfigured(),
+        recorder_available: recorderAvailable(),
         intake_configured: !!s.intake_key_hash,
         quo_configured: !!(
           s.quo_api_key &&

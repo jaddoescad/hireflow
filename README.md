@@ -73,7 +73,8 @@ The core hiring workspace works without connecting external services.
 | --- | --- | --- |
 | Zapier / webhooks | Company-scoped application intake with retry deduplication | Generate an intake token in Integrations; POST to `/api/webhooks/intake` |
 | Quo | Candidate call and SMS history; signed webhook updates | Configure the company's API key, phone line, and signing secrets in Integrations |
-| Google Workspace | One account per company: read-only email sync with private resume attachments, Calendar/Meet interviews, and recordings copied to private storage for the team | Configure Google OAuth, server encryption and recording storage, then connect the account in Integrations |
+| Google Workspace | One account per company: read-only email sync with private resume attachments, and Calendar/Meet interviews where candidates ask to join and interviewers (co-hosts) admit them | Configure Google OAuth and server encryption, then connect the account in Integrations |
+| Recall.ai | HireFlow Recorder, a meeting bot that records interviews; videos are saved to private storage for the team | Set `RECALL_*` and `RECORDING_STORAGE_*` server variables and add the Recall webhook |
 | SMTP | Team invitation emails and interview organizer confirmations | Set the `SMTP_*` server environment variables |
 
 See [the integration guide](docs/INTEGRATIONS.md) for payload mapping, callback URLs, secrets, and verification commands. HireFlow imports email; it does not send it. Ambiguous conversation matches remain unassigned for manual review.
@@ -94,7 +95,7 @@ Apply new database migrations before deploying the matching application update. 
 1. Fork or clone this repository and import it into Vercel as a **Next.js** project, using the repository root.
 2. Configure your dedicated Supabase project and apply the migrations.
 3. Set the environment variables from `.env.example` in Vercel. Use your canonical HTTPS origin for `APP_URL`. Keep service credentials, SMTP passwords, OAuth secrets, and encryption keys server-side.
-4. Deploy and add the production `/auth/callback` and `/auth/callback?invite=*` URLs to Supabase Auth. If using Google Workspace, register the exact `/api/google/callback` URL in Google OAuth.
+4. Deploy and add the production `/auth/callback` and `/auth/callback?invite=*` URLs to Supabase Auth. If using Google Workspace, register the exact `/api/google/callback` URL in Google OAuth. If recording interviews, add `/api/recall/events` as a Recall webhook.
 5. Point integrations at your stable production URL and run the live verification scripts below.
 
 `vercel.json` includes five-minute email, calendar and recording crons. Use a Vercel plan that supports this frequency, or remove the cron entries and configure an external scheduler to call `/api/cron/gmail`, `/api/cron/meet` and `/api/cron/recordings` with `Authorization: Bearer <CRON_SECRET>`. Keep `GMAIL_TOKEN_KEY` stable across deployments so existing Google credentials remain readable.
