@@ -98,7 +98,7 @@ export async function scheduleRecorder(session: Interview, meetUrl: string | nul
         ...(plan.create.join_at ? { join_at: plan.create.join_at } : {}),
         recording_config: { video_mixed_mp4: {} },
         automatic_leave: {
-          waiting_room_timeout: 1800, noone_joined_timeout: 600,
+          waiting_room_timeout: 600, noone_joined_timeout: 600,
           everyone_left_timeout: { timeout: 600, activate_after: 0 },
         },
         metadata: scope,
