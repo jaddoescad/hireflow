@@ -110,11 +110,11 @@ To move to another provider such as Cloudflare R2, create a private bucket there
 
 ### Instant updates (optional)
 
-Without this, meeting start/end times appear, and a recorder is sent to a rejoined meeting, within about five minutes. With it, Google notifies HireFlow as soon as a meeting starts or ends.
+Without this, HireFlow checks for meeting starts and ends every minute. With it, Google pushes those events to HireFlow to trigger the recorder sooner. Google delivery and recorder startup still take time.
 
 1. Enable the Google Workspace Events API and Pub/Sub in the same project (Pub/Sub needs a billing account). Create a topic and grant `meet-api-event-push@system.gserviceaccount.com` the **Pub/Sub Publisher** role on it.
 2. Create a service account for push authentication. Create a push subscription on the topic with endpoint `https://YOUR_APP_HOST/api/meet/events`, authentication enabled with that service account, audience equal to the endpoint URL, and an acknowledgement deadline of 60 seconds.
-3. Set `MEET_EVENTS_TOPIC=projects/PROJECT/topics/TOPIC` and `MEET_EVENTS_PUSH_ACCOUNT=<service account email>`, then reconnect Google or wait for the next sync. The Calendar view shows **Instant updates on** once Google confirms the subscription. HireFlow renews it before its seven-day expiry. The five-minute sync keeps running as the recovery path.
+3. Set `MEET_EVENTS_TOPIC=projects/PROJECT/topics/TOPIC` and `MEET_EVENTS_PUSH_ACCOUNT=<service account email>`, then reconnect Google or wait for the next sync. The Calendar view shows **Instant updates on** once Google confirms the subscription. HireFlow renews it before its seven-day expiry. The one-minute sync keeps running as the recovery path. The push handler rejects untrusted senders and requests redelivery when processing fails or a sync is already busy.
 
 ### Verification
 

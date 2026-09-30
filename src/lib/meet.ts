@@ -341,7 +341,7 @@ async function renewEvents(connection: Connection, google: Google,
     } });
   } catch (e) {
     if (authFailure(e)) throw e;
-    await commit(null, { events: { error: "Instant updates are unavailable, so HireFlow checks Google every few minutes. " + meetError(e) } });
+    await commit(null, { events: { error: "Instant updates are unavailable, so HireFlow checks Google every minute. " + meetError(e) } });
   }
 }
 
@@ -355,7 +355,8 @@ export async function handleMeetEvent(subscription: string, type: string, data: 
   let retry = false;
   for (const connection of connections) {
     if (type.startsWith("google.workspace.events.subscription.")) {
-      retry ||= (await syncMeet(connection.company_id, null, undefined, { budget: 50000, renewEvents: true })).state === "busy";
+      const result = await syncMeet(connection.company_id, null, undefined, { budget: 50000, renewEvents: true });
+      retry = result.state === "busy" || !!result.error || retry;
       continue;
     }
     const conference = (data.conferenceRecord?.name || "").match(/^conferenceRecords\/[^/]+/)?.[0];
@@ -365,8 +366,10 @@ export async function handleMeetEvent(subscription: string, type: string, data: 
     const record = await googleApi(credentials)<{ space?: string }>(`https://meet.googleapis.com/v2/${conference}`);
     const session = await db.from("hf_interviews").select("id").eq("company_id", connection.company_id)
       .eq("meet_space", record.space || "").limit(1).maybeSingle();
-    if (session.error || !session.data) continue;
-    retry ||= (await syncMeet(connection.company_id, null, session.data.id, { budget: 50000 })).state === "busy";
+    if (session.error) throw new Error("Could not locate the interview.");
+    if (!session.data) continue;
+    const result = await syncMeet(connection.company_id, null, session.data.id, { budget: 50000 });
+    retry = result.state === "busy" || !!result.error || retry;
   }
   return retry;
 }
