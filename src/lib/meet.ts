@@ -13,10 +13,9 @@ export const meetEventTypes = [
   "google.workspace.meet.conference.v2.started",
   "google.workspace.meet.conference.v2.ended",
 ];
-// Rooms HireFlow creates admit only their members (the interviewers, as co-hosts) directly. Candidates and the
-// recorder ask to join, and an interviewer lets them in.
+// Workspace colleagues enter directly; Google also trusts invited guests. The recorder still asks to join.
 const roomConfig = {
-  accessType: "RESTRICTED", entryPointAccess: "ALL", moderation: "ON",
+  accessType: "TRUSTED", entryPointAccess: "ALL", moderation: "ON",
   moderationRestrictions: {
     chatRestriction: "NO_RESTRICTION", reactionRestriction: "NO_RESTRICTION",
     presentRestriction: "NO_RESTRICTION", defaultJoinAsViewerType: "OFF",
@@ -189,6 +188,13 @@ async function syncSession(company: string, session: Interview, google: Google,
     // Saved before the invitation goes out so a retry reuses this room. A newer edit is handled by its own sync.
     if (!(await commit(session, { space: { name: space, meet_url: meetUrl } }))) return;
   }
+  if (!legacy && space) {
+    const room = await google<{ config?: { accessType?: string } }>(`https://meet.googleapis.com/v2/${space}`);
+    if (room.config?.accessType !== roomConfig.accessType)
+      await google(`https://meet.googleapis.com/v2/${space}?updateMask=config.accessType`, "PATCH", {
+        config: { accessType: roomConfig.accessType },
+      });
+  }
   // Co-hosts are rechecked until they all succeed; one that fails does not hold back the invitation.
   const hostProblem = !legacy && space && (pending || !session.synced_version || session.last_error)
     ? await syncCohosts(company, session, space, google, deadline) : null;
@@ -249,7 +255,7 @@ async function syncSession(company: string, session: Interview, google: Google,
 
 function invitationText(meetUrl: string, recorded: boolean) {
   return [`Join Google Meet: ${meetUrl}`, "",
-    "Select \"Ask to join\" and your interviewer will let you in.",
+    "Join using your invited Google account. If Google asks you to request access, your interviewer will let you in.",
     ...(recorded ? ["", `This interview is recorded. ${recorderName} will also ask to join the call.`] : []),
   ].join("\n");
 }

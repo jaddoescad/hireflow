@@ -96,7 +96,7 @@ export function Integrations({
             <p>
               One company account for hiring. Candidate emails and resumes
               arrive in Chat, and interviews are sent from its calendar with a
-              Meet link. Candidates ask to join, and interviewers let them in.
+              Meet link. Workspace colleagues and invited guests join directly; interviewers admit the recorder.
             </p>
             {data.integration?.google_connected ? (
               <>
