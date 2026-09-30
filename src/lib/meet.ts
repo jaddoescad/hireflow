@@ -196,8 +196,7 @@ async function syncSession(company: string, session: Interview, google: Google,
       });
   }
   // Co-hosts are rechecked until they all succeed; one that fails does not hold back the invitation.
-  const hostProblem = !legacy && space && (pending || !session.synced_version || session.last_error)
-    ? await syncCohosts(company, session, space, google, deadline) : null;
+  
   const body = {
     summary: calendarTitle,
     ...(!legacy && meetUrl ? { location: meetUrl, description: invitationText(meetUrl, session.auto_record) } : {}),
@@ -236,6 +235,9 @@ async function syncSession(company: string, session: Interview, google: Google,
     try { space = (await google<{ name: string }>(`https://meet.googleapis.com/v2/spaces/${meetUrl.split("/").pop()}`)).name; }
     catch (e) { if (authFailure(e)) throw e; }
   }
+  // Calendar updates can change room membership. Reconcile roles after the invitation is saved,
+  // including existing rooms and company membership changes.
+  const hostProblem = space ? await syncCohosts(company, session, space, google, deadline) : null;
   const attendees = (event.attendees || []).filter(a => a.email && !a.resource)
     .map(a => ({ email: a.email!.toLowerCase(), responseStatus: a.responseStatus || "needsAction" }));
   const facts = await observe(session, space, google, deadline);
@@ -260,22 +262,26 @@ function invitationText(meetUrl: string, recorded: boolean) {
   ].join("\n");
 }
 
-// Interviewers become co-hosts of the room: they join directly and can let the candidate and recorder in.
+// Enabled company members become co-hosts so any internal member can admit the recorder.
 // Returns a problem to show when Google refuses someone.
 async function syncCohosts(company: string, session: Interview, space: string, google: Google, deadline: number) {
   const db = adminDb();
   const { data, error } = await db.from("hf_members").select("email").eq("company_id", company)
-    .in("user_id", session.interviewer_ids).eq("enabled", true);
-  if (error) throw new Error("Could not load interviewers.");
+    .eq("enabled", true);
+  if (error) throw new Error("Could not load company members.");
   const wanted = new Set((data as { email: string }[]).map(m => m.email.toLowerCase()).filter(email => email !== session.organizer));
-  const members = await pages<"members", { name: string; email?: string }>(google, `https://meet.googleapis.com/v2/${space}/members`, "members", deadline);
+  const members = await pages<"members", { name: string; email?: string; role?: string }>(google, `https://meet.googleapis.com/v2/${space}/members`, "members", deadline);
   for (const member of members)
     if (!member.email || !wanted.has(member.email.toLowerCase())) await google(`https://meet.googleapis.com/v2/${member.name}`, "DELETE");
-  const current = new Set(members.map(m => m.email?.toLowerCase()));
+  const current = new Map(members.map(m => [m.email?.toLowerCase(), m]));
   const refused: string[] = [];
   for (const email of wanted) {
-    if (current.has(email)) continue;
-    try { await google(`https://meet.googleapis.com/v2/${space}/members`, "POST", { email, role: "COHOST" }); }
+    const member = current.get(email);
+    if (member?.role === "COHOST") continue;
+    try {
+      if (member) await google(`https://meet.googleapis.com/v2/${member.name}?updateMask=role`, "PATCH", { role: "COHOST" });
+      else await google(`https://meet.googleapis.com/v2/${space}/members`, "POST", { email, role: "COHOST" });
+    }
     catch (e) {
       if (authFailure(e)) throw e;
       const code = httpStatus(e);
