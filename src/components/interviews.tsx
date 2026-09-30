@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, RefreshCw, Play, ExternalLink } from "lucide-react";
-import type { Workspace } from "@/lib/types";
+import type { Candidate, Workspace } from "@/lib/types";
 import { interviewCalendarTitle, interviewLengths, localDateTime, localInterviewWindow, type Interview, type Recording, type GoogleConnection } from "@/lib/interviews";
 import { recorderName, recordingStatus } from "@/lib/recorder";
 import { Field, Modal } from "./primitives";
@@ -178,9 +178,7 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
       if(at) setDuplicate(at); else setError((e as Error).message);
     }finally{setBusy(false);}
   }}>
-    <Field label="Candidate"><select value={candidate} required onChange={e=>{setCandidate(e.target.value);setEmail(data.candidates.find(c=>c.id===e.target.value)?.email||"");setDuplicate(null);}}>
-      <option value="">Choose a candidate</option>{data.candidates.map(c=><option key={c.id} value={c.id}>{c.name}{c.job_title?` · ${c.job_title}`:""}</option>)}
-    </select></Field>
+    <CandidatePicker candidates={data.candidates} value={candidate} onChange={c=>{setCandidate(c?.id||"");setEmail(c?.email||"");setDuplicate(null);}}/>
     <Field label="Candidate email"><input type="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></Field>
     {candidate&&email.trim().toLowerCase()!==(data.candidates.find(c=>c.id===candidate)?.email||"")&&<small className="interview-timezone">The invitation goes to this address, and it replaces the email on the candidate&apos;s profile.</small>}
     <Field label="Session title"><input name="title" required maxLength={160} defaultValue={session?.title||"Interview"}/></Field>
@@ -195,4 +193,28 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
     {duplicate&&<p className="error" role="alert">{data.candidates.find(c=>c.id===candidate)?.name||"This candidate"} already has an interview {new Date(duplicate).toLocaleString(undefined,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}. Check the Calendar before booking again, or schedule another if this is a new round.</p>}
     <footer className="form-actions"><button type="button" onClick={onClose}>Back</button><button className="primary" disabled={busy||members.length===0}>{busy?"Saving…":duplicate?"Schedule another anyway":session?"Save & notify guests":"Schedule & send invitations"}</button></footer>
   </form></Modal>;
+}
+
+function CandidatePicker({candidates,value,onChange}:{candidates:Candidate[];value:string;onChange:(c:Candidate|null)=>void}) {
+  const input=useRef<HTMLInputElement>(null);
+  const [query,setQuery]=useState(()=>candidates.find(c=>c.id===value)?.name||"");
+  const [open,setOpen]=useState(false),[active,setActive]=useState(0);
+  const terms=query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matches=candidates.filter(c=>{const text=`${c.name} ${c.email||""} ${c.job_title}`.toLowerCase();return terms.every(t=>text.includes(t));}).slice(0,8);
+  useEffect(()=>{input.current?.setCustomValidity(value?"":"Search and choose a candidate.");},[value]);
+  const choose=(c:Candidate)=>{onChange(c);setQuery(c.name);setOpen(false);};
+  return <Field label="Candidate"><div className="candidate-picker">
+    <input ref={input} value={query} required autoComplete="off" placeholder="Search by name, email, or job" role="combobox" aria-expanded={open} aria-controls="candidate-picker-list"
+      onClick={()=>setOpen(true)} onBlur={()=>setOpen(false)}
+      onChange={e=>{setQuery(e.target.value);setActive(0);setOpen(true);if(value) onChange(null);}}
+      onKeyDown={e=>{
+        if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();setOpen(true);setActive(a=>Math.max(0,Math.min(matches.length-1,a+(e.key==="ArrowDown"?1:-1))));}
+        else if(e.key==="Enter"&&open&&matches[active]){e.preventDefault();choose(matches[active]);}
+        else if(e.key==="Escape"&&open){e.preventDefault();e.stopPropagation();setOpen(false);}
+      }}/>
+    {open&&<div id="candidate-picker-list" role="listbox">{matches.length===0?<p>No matching candidates</p>:matches.map((c,i)=>
+      <div key={c.id} role="option" aria-selected={i===active} className={i===active?"active":undefined} onMouseDown={e=>{e.preventDefault();choose(c);}} onMouseEnter={()=>setActive(i)}>
+        <strong>{c.name}</strong><small>{[c.job_title,c.email].filter(Boolean).join(" · ")}</small>
+      </div>)}</div>}
+  </div></Field>;
 }

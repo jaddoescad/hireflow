@@ -64,3 +64,43 @@
     overflow-wrap: anywhere;
   }
 }
+
+.candidate-picker {
+  position: relative;
+}
+.candidate-picker input {
+  width: 100%;
+}
+.candidate-picker [role="listbox"] {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(13, 29, 49, 0.12);
+  font-weight: 400;
+}
+.candidate-picker [role="option"] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.candidate-picker [role="option"].active {
+  background: var(--surface);
+}
+.candidate-picker [role="option"] small,
+.candidate-picker [role="listbox"] p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.candidate-picker [role="listbox"] p {
+  margin: 0;
+  padding: 10px 12px;
+}
