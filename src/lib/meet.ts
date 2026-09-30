@@ -284,7 +284,7 @@ async function syncCohosts(company: string, session: Interview, space: string, g
 // Conference records expire after 30 days, so start and end times are saved as soon as they are seen.
 // A failed check is omitted and retried on the next sync instead of blocking scheduling updates.
 async function observe(session: Interview, space: string | null, google: Google, deadline: number) {
-  if (!space || !meetingWindowOpen(session)) return undefined;
+  if (!space || (!session.auto_record && !meetingWindowOpen(session))) return undefined;
   try { return await meetingFacts(space, google, deadline); }
   catch (e) { if (authFailure(e)) throw e; return undefined; }
 }

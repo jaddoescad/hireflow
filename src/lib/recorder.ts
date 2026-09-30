@@ -60,12 +60,12 @@ export function planRecorder(
   const cancel = booked.filter(v => v !== current).map(v => v.name);
   const kept = visits.filter(v => v.state !== "cancelled" && !cancel.includes(v.name));
   const create = { join_at: null as string | null, planned_start: session.starts_at };
-  if (start > now && !kept.some(v => v.planned_start && Date.parse(v.planned_start) === start)) {
-    // Someone already in the meeting gets the recorder now rather than at the start.
-    const join_at = liveSince && recorderWindowOpen(session, now) ? null : recorderJoinAt(session.starts_at, now);
+  if (!liveSince && start > now && !kept.some(v => v.planned_start && Date.parse(v.planned_start) === start)) {
+    // With nobody in the meeting, keep the scheduled-start backup.
+    const join_at = recorderJoinAt(session.starts_at, now);
     if (join_at || recorderWindowOpen(session, now)) return { cancel, create: { ...create, join_at } };
   }
-  if (!liveSince || !recorderWindowOpen(session, now)) return { cancel, create: null };
+  if (!liveSince) return { cancel, create: null };
   if (current) {
     const arriving = !current.join_at || Date.parse(current.join_at) - now <= 60000;
     return arriving ? { cancel, create: null } : { cancel: [...cancel, current.name], create };

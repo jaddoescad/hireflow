@@ -52,14 +52,20 @@ test("a recorder is sent when the first person joins, and again when a meeting i
   const failures = ["a", "b", "c", "d", "e"].map(name => visit({ name, state: "failed", planned_start: at(-30), status_at: at(-20) }));
   assert.equal(planRecorder(session(-30), failures.slice(1), link, at(-5), now).create?.join_at, null);
   assert.deepEqual(planRecorder(session(-30), failures, link, at(-5), now), { cancel: [], create: null });
-  // Past the window nothing new is sent.
-  assert.deepEqual(planRecorder(session(-170), [ended], link, at(-5), now), { cancel: [], create: null });
+  // A live meeting gets a recorder even after its scheduled window.
+  assert.deepEqual(planRecorder(session(-170), [ended], link, at(-5), now), { cancel: [], create: { join_at: null, planned_start: at(-170) } });
   // The first person to join, even before the start, gets a recorder right away instead of the booking.
   assert.deepEqual(planRecorder(session(14), [visit({ planned_start: at(14), join_at: at(13) })], link, at(-1), now),
     { cancel: ["bot-1"], create: { join_at: null, planned_start: at(14) } });
   assert.deepEqual(planRecorder(session(14), [], link, at(-1), now), { cancel: [], create: { join_at: null, planned_start: at(14) } });
-  // Before the window opens nothing is sent; a booking about to arrive, or one already sent, is left alone.
-  assert.deepEqual(planRecorder(session(20), [visit({ planned_start: at(20), join_at: at(19) })], link, at(-1), now), { cancel: [], create: null });
+  // A live meeting replaces a future booking regardless of the scheduled date.
+  assert.deepEqual(planRecorder(session(20), [visit({ planned_start: at(20), join_at: at(19) })], link, at(-1), now),
+    { cancel: ["bot-1"], create: { join_at: null, planned_start: at(20) } });
+  const monthAhead = 29 * 24 * 60;
+  assert.deepEqual(planRecorder(session(monthAhead), [visit({ planned_start: at(monthAhead), join_at: at(monthAhead - 1) })], link, at(-1), now),
+    { cancel: ["bot-1"], create: { join_at: null, planned_start: at(monthAhead) } });
+  assert.deepEqual(planRecorder(session(monthAhead), [], link, at(-1), now),
+    { cancel: [], create: { join_at: null, planned_start: at(monthAhead) } });
   assert.deepEqual(planRecorder(session(1.5), [visit({ planned_start: at(1.5), join_at: at(0.5) })], link, at(-5), now), { cancel: [], create: null });
   assert.deepEqual(planRecorder(session(14), [visit({ planned_start: at(14), join_at: null, created_at: at(-1) })], link, at(-2), now), { cancel: [], create: null });
   // One sent early and turned away is not replaced in the same meeting, and the booking is not recreated.
