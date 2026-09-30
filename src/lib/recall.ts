@@ -8,7 +8,7 @@ export function recorderAvailable() {
   return !!process.env.RECALL_API_KEY;
 }
 class RecallError extends Error {
-  constructor(readonly status: number) { super(`Recall request failed (${status})`); }
+  constructor(readonly status: number, readonly fields: string[] = []) { super(`Recall request failed (${status})`); }
 }
 async function recall<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const base = new URL(process.env.RECALL_API_URL || "https://us-east-1.recall.ai");
@@ -18,7 +18,24 @@ async function recall<T>(path: string, method = "GET", body?: unknown): Promise<
     headers: { Authorization: `Token ${process.env.RECALL_API_KEY}`, "Content-Type": "application/json" },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  if (!response.ok) throw new RecallError(response.status);
+  if (!response.ok) {
+    const fields: string[] = [];
+    if (response.status === 400) {
+      const details = await response.json().catch(() => null);
+      // Report field names only: provider responses can contain private meeting data.
+      const collect = (value: unknown, prefix = "") => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return;
+        for (const [key, nested] of Object.entries(value)) {
+          if (!/^[a-z_]{1,50}$/.test(key)) continue;
+          const field = prefix ? `${prefix}.${key}` : key;
+          if (nested && typeof nested === "object" && !Array.isArray(nested)) collect(nested, field);
+          else fields.push(field);
+        }
+      };
+      collect(details);
+    }
+    throw new RecallError(response.status, fields);
+  }
   const text = await response.text();
   return (text ? JSON.parse(text) : null) as T;
 }
@@ -26,7 +43,7 @@ function recallProblem(error: unknown) {
   const status = error instanceof RecallError ? error.status : 0;
   return status === 401 || status === 403 ? "Recall rejected the API key. Check RECALL_API_KEY and RECALL_API_URL."
     : status === 507 ? "Recall has no recorder free right now. HireFlow will try again in a few minutes."
-    : status === 400 ? "Recall could not book a recorder for this Meet link."
+    : status === 400 ? `Recall could not book a recorder for this Meet link.${error instanceof RecallError && error.fields.length ? ` Check ${error.fields.join(", ")}.` : ""}`
     : "Could not reach Recall to book the recorder. HireFlow will try again in a few minutes.";
 }
 
