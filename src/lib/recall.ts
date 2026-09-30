@@ -116,7 +116,7 @@ export async function scheduleRecorder(session: Interview, meetUrl: string | nul
         recording_config: { video_mixed_mp4: {} },
         automatic_leave: {
           waiting_room_timeout: 600, noone_joined_timeout: 600,
-          everyone_left_timeout: { timeout: 600, activate_after: 0 },
+          everyone_left_timeout: { timeout: 600, activate_after: 1 },
         },
         metadata: scope,
       })];
