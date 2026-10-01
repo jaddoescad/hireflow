@@ -330,7 +330,6 @@ export function HiringBoard({
                         <Avatar name={c.name} />
                         <div>
                           <strong>{c.name}</strong>
-                          <RolePill role={c.job_title} />
                         </div>
                         <span
                           className={`candidate-score-badge ${c.score_average == null ? "unrated" : c.score_average >= 8 ? "high" : c.score_average >= 6 ? "medium" : "low"}`}
@@ -351,6 +350,7 @@ export function HiringBoard({
                         </span>
                       </div>
                       <div className="tags">
+                        <RolePill role={c.job_title} />
                         {c.experience && <span>{c.experience}</span>}
                         {c.tags.slice(0, 2).map((t) => (
                           <span key={t}>{t}</span>
