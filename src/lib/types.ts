@@ -95,13 +95,13 @@ export type Workspace = {
   activities: Activity[];
   invitations: Invitation[];
   integration: {
+    fireflies_connected?: boolean;
+    fireflies_account?: string | null;
     google_available: boolean;
     google_connected: boolean;
     google_account: string | null;
     gmail_synced_at: string | null;
     gmail_error: string | null;
-    recording_storage: boolean;
-    recorder_available: boolean;
     intake_configured: boolean;
     quo_configured: boolean;
     quo_phone: string | null;

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { sessionDb, adminDb } from "@/lib/supabase/server";
 import { googleAvailable } from "@/lib/google";
-import { recordingStorageConfigured } from "@/lib/recording-storage";
-import { recorderAvailable } from "@/lib/recall";
 import { failure } from "@/lib/http";
 import { z } from "zod";
 import { allCandidates } from "@/lib/candidates";
@@ -68,7 +66,7 @@ export async function GET(request: Request) {
     let integration = null;
     if (membership.role === "admin") {
       const admin = adminDb();
-      const [inv, settings, google, gmail] = await Promise.all([
+      const [inv, settings, google, gmail, fireflies] = await Promise.all([
         admin
           .from("hf_invitations")
           .select("id,email,role,expires_at,accepted_at,revoked_at,created_at")
@@ -89,22 +87,24 @@ export async function GET(request: Request) {
           .select("synced_at,last_error")
           .eq("company_id", cid)
           .maybeSingle(),
+        admin.from("hf_fireflies_connections").select("account").eq("company_id", cid).maybeSingle(),
       ]);
       if (inv.error) throw inv.error;
       if (settings.error) throw settings.error;
       if (google.error) throw google.error;
       if (gmail.error) throw gmail.error;
+      if (fireflies.error) throw fireflies.error;
       invitations = inv.data;
       const s = settings.data;
       integration = {
+        fireflies_connected: !!fireflies.data,
+        fireflies_account: fireflies.data?.account || null,
         google_available: googleAvailable(),
         google_connected: !!google.data?.credentials,
         google_account: google.data?.credentials ? google.data.account : null,
         gmail_synced_at: gmail.data?.synced_at || null,
         gmail_error: gmail.data?.last_error || null,
-        recording_storage: recordingStorageConfigured(),
-        recorder_available: recorderAvailable(),
-        intake_configured: !!s.intake_key_hash,
+                intake_configured: !!s.intake_key_hash,
         quo_configured: !!(
           s.quo_api_key &&
           s.quo_phone_id &&

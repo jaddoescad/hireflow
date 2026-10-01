@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, RefreshCw, Play, ExternalLink } from "lucide-react";
 import type { Candidate, Workspace } from "@/lib/types";
 import { interviewCalendarTitle, interviewLengths, localDateTime, localInterviewWindow, type Interview, type Recording, type GoogleConnection } from "@/lib/interviews";
-import { recorderName, recordingStatus } from "@/lib/recorder";
+import { recordingStatus } from "@/lib/recording-status";
 import { Field, Modal } from "./primitives";
 import { GoogleResult } from "./integrations";
 import "./interviews.css";
@@ -103,7 +103,7 @@ export function Interviews({data,onRefresh}: {data:Workspace;onRefresh:()=>void}
               {s.meet_url&&s.status!=="cancelled"&&!s.cancel_requested
                 ?<a href={s.meet_url} target="_blank" rel="noreferrer" title={`Join ${calendarTitle(s)} in Google Meet`}><span>{dateLabel(s.starts_at,{hour:"numeric",minute:"2-digit"})}</span><strong>{calendarTitle(s)}</strong></a>
                 :<button onClick={()=>setSelected(s.id)}><span>{dateLabel(s.starts_at,{hour:"numeric",minute:"2-digit"})}</span><strong>{calendarTitle(s)}</strong></button>}
-              <button className="event-details" onClick={()=>setSelected(s.id)} aria-label={`Details and recordings for ${calendarTitle(s)}`}>Details{recordings.some(r=>r.interview_id===s.id&&r.storage_key)?" · Recording":""}</button>
+              <button className="event-details" onClick={()=>setSelected(s.id)} aria-label={`Details and recordings for ${calendarTitle(s)}`}>Details{recordings.some(r=>r.interview_id===s.id&&(r.storage_key||r.fireflies_id))?" · Recording":""}</button>
             </div>)}
           </div>;
         })}
@@ -133,13 +133,10 @@ export function Interviews({data,onRefresh}: {data:Workspace;onRefresh:()=>void}
           <button disabled={busy||!connection?.connected} onClick={()=>void sync(session.id)}><RefreshCw size={15}/> Refresh session</button>
         </div>
         <h3>Recordings</h3>
-        <p className="muted">{!session.auto_record?"Recording is off for this interview."
-          :connection&&!connection.recorder?"The recorder is not set up on this server, so this interview will not be recorded."
-          :`${recorderName} asks to join as soon as someone joins the call. Let it in when you admit the candidate.`}</p>
-        {session.recorder_error&&<p className="error">{session.recorder_error}</p>}
+        <p className="muted">When connected, Fireflies joins automatically when this interview starts. Admit the recorder in Meet. Processing can take several minutes after the call ends.</p>
         {sessionRecordings.map(r=><div className="interview-recording" key={r.name}>
-          <Video size={21}/><div><strong>{r.starts_at?dateLabel(r.starts_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):r.join_at?`Joins ${dateLabel(r.join_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}`:recorderName}</strong><small>{recordingStatus(r)}{r.error&&!r.storage_key?` · ${r.error}`:""}{r.storage_key&&r.starts_at&&r.ends_at?` · ${Math.max(1,Math.round((Date.parse(r.ends_at)-Date.parse(r.starts_at))/60000))} min`:""}</small></div>
-          {r.storage_key&&<a href={`/?company=${cid}&view=recordings`}><Play size={15}/> Watch recording</a>}
+          <Video size={21}/><div><strong>{r.starts_at?dateLabel(r.starts_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):r.join_at?`Joins ${dateLabel(r.join_at,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}`:"Interview recording"}</strong><small>{recordingStatus(r)}{r.error&&!r.storage_key?` · ${r.error}`:""}{r.storage_key&&r.starts_at&&r.ends_at?` · ${Math.max(1,Math.round((Date.parse(r.ends_at)-Date.parse(r.starts_at))/60000))} min`:""}</small></div>
+          {(r.storage_key||r.fireflies_id)&&<a href={`/?company=${cid}&view=recordings`}><Play size={15}/> Watch recording</a>}
         </div>)}
         {!sessionRecordings.length&&<p>{session.meeting_ended_at?"No recording was made for this meeting.":"No recording yet."}</p>}
         {session.status!=="cancelled"&&!session.cancel_requested&&<button className="danger" disabled={busy||!connection?.connected} onClick={async()=>{
@@ -169,7 +166,7 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
       const result=await json("/api/interviews",{company_id:data.company!.id,payload:{
         id,version:session?.version||0,candidate_id:candidate,title:form.get("title"),
         ...window,
-        timezone,interviewer_ids:members,auto_record:form.get("auto_record")==="on",candidate_email:email,
+        timezone,interviewer_ids:members,candidate_email:email,
         allow_another:!!duplicate,
       }});
       await onSave(result.id);
@@ -187,8 +184,8 @@ export function InterviewEditor({data,session,candidateId,onClose,onSave}:{data:
       <Field label="Length"><select name="length" defaultValue={length}>{[...new Set([...interviewLengths,length])].sort((a,b)=>a-b).map(m=><option key={m} value={m}>{m<60?`${m} min`:`${m/60} hr`}</option>)}</select></Field></div>
     <small className="interview-timezone">{timezone}</small>
     <fieldset className="interviewer-picker"><legend>Internal interviewers</legend>{data.members.filter(m=>m.enabled).map(m=><label key={m.user_id}><input type="checkbox" checked={members.includes(m.user_id)} onChange={e=>setMembers(e.target.checked?[...members,m.user_id]:members.filter(id=>id!==m.user_id))}/><span>{m.email}</span></label>)}</fieldset>
-    <label className="interview-checkbox"><input type="checkbox" name="auto_record" defaultChecked={session?.auto_record??true}/> Record with {recorderName}</label>
-    <p className="muted">Interviewers join directly. The candidate asks to join and an interviewer lets them in; {recorderName} asks to join the same way. Google emails invitations and changes to guests, and HireFlow emails a confirmation to the connected organizer.</p>
+    <small>When Fireflies is connected, every interview is recorded automatically. Tell participants the interview is recorded and admit the recorder when it asks to join. Fireflies records for up to two hours.</small>
+    <p className="muted">Interviewers join directly. The candidate asks to join and an interviewer lets them in. Google emails invitations and changes to guests, and HireFlow emails a confirmation to the connected organizer.</p>
     {error&&<p className="error" role="alert">{error}</p>}
     {duplicate&&<p className="error" role="alert">{data.candidates.find(c=>c.id===candidate)?.name||"This candidate"} already has an interview {new Date(duplicate).toLocaleString(undefined,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}. Check the Calendar before booking again, or schedule another if this is a new round.</p>}
     <footer className="form-actions"><button type="button" onClick={onClose}>Back</button><button className="primary" disabled={busy||members.length===0}>{busy?"Saving…":duplicate?"Schedule another anyway":session?"Save & notify guests":"Schedule & send invitations"}</button></footer>

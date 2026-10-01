@@ -1,19 +1,18 @@
+import { dispatchFireflies } from "./fireflies";
+import { recorderPresence, type MeetParticipant } from "./recorder-presence";
 import "server-only";
 import { adminDb } from "./supabase/server";
 import { openGmail } from "./gmail-crypto";
 import { googleOAuth } from "./google";
-import { googleMeetUrl, interviewCalendarTitle, interviewTitleFromCalendar, meetingWindowOpen, type Interview } from "./interviews";
+import { googleMeetUrl, interviewCalendarTitle, interviewTitleFromCalendar, type Interview } from "./interviews";
 import { notifyInterviewOrganizer } from "./interview-notifications";
-import { scheduleRecorder } from "./recall";
-import { recordingStorageConfigured } from "./recording-storage";
-import { recorderName } from "./recorder";
 
 const eventsApi = "https://workspaceevents.googleapis.com/v1";
 export const meetEventTypes = [
   "google.workspace.meet.conference.v2.started",
   "google.workspace.meet.conference.v2.ended",
 ];
-// Workspace colleagues enter directly; Google also trusts invited guests. The recorder still asks to join.
+// Workspace colleagues enter directly; Google also trusts invited guests. Other guests still ask to join.
 const roomConfig = {
   accessType: "TRUSTED", entryPointAccess: "ALL", moderation: "ON",
   moderationRestrictions: {
@@ -155,9 +154,8 @@ async function syncSession(company: string, session: Interview, google: Google,
       try { await google(eventUrl + "?sendUpdates=all", "DELETE"); }
       catch (e) { if (![404, 410].includes(httpStatus(e) || 0)) throw e; }
     }
-    const facts = await observe(session, session.meet_space, google, deadline);
+    const facts = await observe(session.meet_space, google, deadline);
     await commit(session, { sync: { status: "cancelled" }, observed: facts?.saved });
-    await scheduleRecorder({ ...session, status: "cancelled" }, session.meet_url, null, recordingStorageConfigured());
     return;
   }
   if (!event && session.synced_version > 0) {
@@ -199,7 +197,7 @@ async function syncSession(company: string, session: Interview, google: Google,
   
   const body = {
     summary: calendarTitle,
-    ...(!legacy && meetUrl ? { location: meetUrl, description: invitationText(meetUrl, session.auto_record) } : {}),
+    ...(!legacy && meetUrl ? { location: meetUrl, description: invitationText(meetUrl) } : {}),
     start: { dateTime: session.starts_at, timeZone: session.timezone },
     end: { dateTime: session.ends_at, timeZone: session.timezone },
     attendees: session.attendees.map(a => ({ email: a.email, responseStatus: known.get(a.email) || a.responseStatus || "needsAction" })),
@@ -240,7 +238,7 @@ async function syncSession(company: string, session: Interview, google: Google,
   const hostProblem = space ? await syncCohosts(company, session, space, google, deadline) : null;
   const attendees = (event.attendees || []).filter(a => a.email && !a.resource)
     .map(a => ({ email: a.email!.toLowerCase(), responseStatus: a.responseStatus || "needsAction" }));
-  const facts = await observe(session, space, google, deadline);
+  const facts = await observe(space, google, deadline);
   const fresh = await commit(session, {
     sync: { status: "scheduled", meet_url: meetUrl, meet_space: space,
       title: event.summary === calendarTitle ? session.title : event.summary ? interviewTitleFromCalendar(event.summary, candidate.data.name) : undefined,
@@ -249,20 +247,17 @@ async function syncSession(company: string, session: Interview, google: Google,
     observed: facts?.saved,
   });
   if (!fresh) return;
+  if (space) await dispatchFireflies(company, session.id, facts?.presence?.humans.length ? facts.live! : "scheduled", facts?.presence);
   if (hostProblem) await commit(session, { error: hostProblem });
-  await scheduleRecorder({ ...session, status: "scheduled",
-    starts_at: event.start?.dateTime || session.starts_at, ends_at: event.end?.dateTime || session.ends_at },
-  meetUrl, facts?.liveSince || null, recordingStorageConfigured());
 }
 
-function invitationText(meetUrl: string, recorded: boolean) {
+function invitationText(meetUrl: string) {
   return [`Join Google Meet: ${meetUrl}`, "",
     "Join using your invited Google account. If Google asks you to request access, your interviewer will let you in.",
-    ...(recorded ? ["", `This interview is recorded. ${recorderName} will also ask to join the call.`] : []),
   ].join("\n");
 }
 
-// Enabled company members become co-hosts so any internal member can admit the recorder.
+// Enabled company members become co-hosts so any internal member can admit the candidate.
 // Returns a problem to show when Google refuses someone.
 async function syncCohosts(company: string, session: Interview, space: string, google: Google, deadline: number) {
   const db = adminDb();
@@ -295,8 +290,8 @@ async function syncCohosts(company: string, session: Interview, space: string, g
 
 // Conference records expire after 30 days, so start and end times are saved as soon as they are seen.
 // A failed check is omitted and retried on the next sync instead of blocking scheduling updates.
-async function observe(session: Interview, space: string | null, google: Google, deadline: number) {
-  if (!space || (!session.auto_record && !meetingWindowOpen(session))) return undefined;
+async function observe(space: string | null, google: Google, deadline: number) {
+  if (!space) return undefined;
   try { return await meetingFacts(space, google, deadline); }
   catch (e) { if (authFailure(e)) throw e; return undefined; }
 }
@@ -307,8 +302,18 @@ async function meetingFacts(space: string, google: Google, deadline: number) {
   if (!conferences.length) return undefined;
   const starts = conferences.map(c => c.startTime).filter(Boolean).sort();
   const liveSince = conferences.filter(c => !c.endTime).map(c => c.startTime || new Date().toISOString()).sort().at(-1);
+  const live = conferences.filter(c => !c.endTime).sort((a,b)=>(b.startTime||"").localeCompare(a.startTime||""))[0]?.name;
+  let presence;
+  if (live) {
+    const all = await pages<"participants", MeetParticipant>(google,
+      `https://meet.googleapis.com/v2/${live}/participants`, "participants", deadline);
+    const current = await pages<"participants", MeetParticipant>(google,
+      `https://meet.googleapis.com/v2/${live}/participants?${new URLSearchParams({filter: "latest_end_time IS NULL"})}`, "participants", deadline);
+    const people = recorderPresence(all).humans;
+    presence = { ...recorderPresence(current), firstHumanAt: people.map(p=>p.earliestStartTime).filter((t): t is string=>!!t).sort()[0] || null };
+  }
   return {
-    liveSince,
+    live, presence,
     saved: { started_at: starts[0] || null, ended_at: liveSince ? null : conferences.map(c => c.endTime!).sort().at(-1) },
   };
 }

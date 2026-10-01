@@ -8,7 +8,6 @@ export const interviewSchema = z.object({
     try { new Intl.DateTimeFormat("en", { timeZone: value }); return true; } catch { return false; }
   }, "Choose a valid timezone."),
   interviewer_ids: z.array(z.uuid()).min(1).max(30),
-  auto_record: z.boolean(),
   // Saved on the candidate record so invitations and email matching use the corrected address.
   candidate_email: z.string().trim().toLowerCase().email("Enter a valid candidate email.").max(254),
   allow_another: z.boolean().default(false),
@@ -21,7 +20,6 @@ export type Interview = {
   id: string; company_id: string; candidate_id: string; title: string;
   starts_at: string; ends_at: string; timezone: string; interviewer_ids: string[];
   attendees: { email: string; responseStatus?: string }[]; organizer: string;
-  auto_record: boolean; recorder_error: string | null;
   status: "pending" | "scheduled" | "cancelled"; cancel_requested: boolean;
   version: number; synced_version: number; google_event_id: string;
   meet_url: string | null; meet_space: string | null;
@@ -65,16 +63,16 @@ export function interviewNotificationMessage(session: InterviewNotification) {
   };
 }
 export type RecordingState = "scheduled" | "joining" | "waiting" | "recording" | "processing" | "done" | "failed" | "cancelled";
-// One row per recorder visit. A rejoined meeting gets another visit, so one interview can have several parts.
+// An interview can have several saved recording parts.
 export type Recording = {
-  interview_id: string; name: string; state: RecordingState; planned_start: string | null; join_at: string | null;
+  interview_id: string; name: string; fireflies_id?: string | null; has_video?: boolean; transcript?: {speaker_name:string;text:string;start_time:number;end_time:number}[] | null; state: RecordingState; planned_start: string | null; join_at: string | null;
   starts_at: string | null; ends_at: string | null; error: string | null; created_at: string;
   storage_key: string | null; storage_error: string | null;
 };
 export type GoogleConnection = {
   connected: boolean; available: boolean; account: string | null;
   synced_at: string | null; last_error: string | null;
-  instant_updates: boolean; events_error: string | null; recorder: boolean;
+  instant_updates: boolean; events_error: string | null;
 };
 export function googleMeetUrl(value: string | undefined | null) {
   if (!value) return null;
@@ -83,10 +81,6 @@ export function googleMeetUrl(value: string | undefined | null) {
     return url.protocol === "https:" && url.hostname === "meet.google.com" &&
       /^\/[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(url.pathname) ? url.origin + url.pathname : null;
   } catch { return null; }
-}
-// Joins in the 15 minutes before the start still belong to the interview.
-export function meetingWindowOpen(session: Pick<Interview, "starts_at">, now = Date.now()) {
-  return Date.parse(session.starts_at) - 15 * 60000 <= now;
 }
 export function localDateTime(iso: string) {
   const date = new Date(iso);

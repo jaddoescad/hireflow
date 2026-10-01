@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { Link2, Phone, Copy, Check, Mail, Video } from "lucide-react";
-import { recorderName } from "@/lib/recorder";
 import type { Workspace } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
 import { Field, when } from "./primitives";
@@ -34,6 +33,9 @@ export function Integrations({
   onRefresh: () => Promise<void>;
 }) {
   const { busy, setBusy, error, setError, saved, run } = useSave(mutate);
+  const [firefliesKey,setFirefliesKey]=useState("");
+  const [testMeet,setTestMeet]=useState("");
+  const [recorderMessage,setRecorderMessage]=useState("");
   const [key, setKey] = useState("");
   const [copied, setCopied] = useState(false);
   const base = typeof window === "undefined" ? "" : location.origin;
@@ -66,6 +68,14 @@ export function Integrations({
       setBusy(false);
     }
   }
+  async function recorderAction(action: "connect"|"disconnect"|"test") {
+    setBusy(true);setError("");setRecorderMessage("");
+    try {
+      const response=await fetch("/api/fireflies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({company_id:data.company!.id,action,...(action==="connect"?{key:firefliesKey}:{}),...(action==="test"?{meeting_url:testMeet}:{})})});
+      const result=await response.json();if(!response.ok) throw new Error(result.error);
+      setFirefliesKey("");setRecorderMessage(result.message|| (action==="connect"?"Fireflies connected.":"Fireflies disconnected."));await onRefresh();
+    } catch(e) {setError((e as Error).message);} finally {setBusy(false);}
+  }
   return (
     <>
       <header className="page-header">
@@ -96,7 +106,7 @@ export function Integrations({
             <p>
               One company account for hiring. Candidate emails and resumes
               arrive in Chat, and interviews are sent from its calendar with a
-              Meet link. Workspace colleagues and invited guests join directly; interviewers admit the recorder.
+              Meet link. Workspace colleagues and invited guests join directly; interviewers admit the candidate.
             </p>
             {data.integration?.google_connected ? (
               <>
@@ -150,33 +160,23 @@ export function Integrations({
         <section className="panel">
           <div className="panel-heading">
             <h2>
-              <Video size={18} /> Interview recorder
+              <Video size={18} /> Interview recording
             </h2>
-            <span
-              className={`status ${data.integration?.recorder_available && data.integration.recording_storage ? "enabled" : "disabled"}`}
-            >
-              {data.integration?.recorder_available && data.integration.recording_storage
-                ? "Ready"
-                : "Not set up"}
-            </span>
+            <span className={`status ${data.integration?.fireflies_connected?"enabled":"disabled"}`}>{data.integration?.fireflies_connected?"Connected":"Not connected"}</span>
           </div>
           <div className="panel-form">
-            <p>
-              {recorderName} asks to join each interview that has recording on.
-              After an interviewer lets it in, the video is saved to HireFlow
-              for everyone on your team.
-            </p>
-            {!data.integration?.recorder_available ? (
-              <p className="muted">
-                The workspace owner needs to add a Recall.ai API key on the
-                server.
-              </p>
-            ) : !data.integration.recording_storage && (
-              <p className="muted">
-                Recording storage is not set up on this server, so videos
-                cannot be saved yet.
-              </p>
-            )}
+            <p>When connected, Fireflies automatically records and transcribes every HireFlow interview. Enable “Record meeting video” in Fireflies and admit the recorder in Meet. In Fireflies auto-join settings, choose “Join calendar events only when I invite Fireflies.ai” so it does not send a second recorder.</p>
+            {data.integration?.fireflies_connected ? <>
+              <strong>{data.integration.fireflies_account}</strong>
+              <button disabled={busy} onClick={()=>void recorderAction("disconnect")}>Disconnect Fireflies</button>
+              <Field label="Test Google Meet link"><input type="url" value={testMeet} onChange={e=>setTestMeet(e.target.value)} placeholder="https://meet.google.com/abc-defg-hij"/></Field>
+              <button disabled={busy||!testMeet} onClick={()=>void recorderAction("test")}>Send recorder to test meeting</button>
+              <small>Use a test call with no applicant data. This sends the recorder immediately; it may take a few minutes to ask to join. The test recording stays in Fireflies.</small>
+            </> : <>
+              <Field label="Fireflies API key"><input type="password" autoComplete="off" value={firefliesKey} onChange={e=>setFirefliesKey(e.target.value)}/></Field>
+              <button disabled={busy||!firefliesKey} onClick={()=>void recorderAction("connect")}>Connect Fireflies</button>
+            </>}
+            {recorderMessage&&<p role="status">{recorderMessage}</p>}
           </div>
         </section>
         <section className="panel">

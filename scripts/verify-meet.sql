@@ -1,4 +1,4 @@
--- Verifies Google connection, Meet, recorder and recording-storage database rules with synthetic records inside one transaction, then rolls back.
+-- Verifies Google connection, Meet and recording-storage database rules with synthetic records inside one transaction, then rolls back.
 -- Run with psql or the Supabase SQL editor. Any failed check aborts with its message.
 begin;
 do $$
@@ -18,7 +18,7 @@ begin
   'stage_id',(select id from public.hf_stages where company_id=cb limit 1)))->>'id')::uuid;
  insert into public.hf_members(company_id,user_id,email,role,enabled) values(ca,d,'meet-interviewer@example.com','member',true);
  base:=jsonb_build_object('version',0,'candidate_id',ka,'title','Painter interview','timezone','America/Toronto',
-  'starts_at',future,'ends_at',future+interval '1 hour','interviewer_ids',jsonb_build_array(a),'auto_record',true);
+  'starts_at',future,'ends_at',future+interval '1 hour','interviewer_ids',jsonb_build_array(a));
 
  -- Connection and scheduling require enabled membership in the same company.
  begin perform public.hf_interview_save(a,ca,base||jsonb_build_object('id',s1)); raise exception using errcode='HF999',message='saved without connection';
@@ -61,12 +61,6 @@ begin
  begin perform 1 from public.hf_google_connections; raise exception using errcode='HF999',message='credentials readable';
  exception when sqlstate 'HF999' then raise; when insufficient_privilege then null; end;
  begin perform 1 from public.hf_storage_deletions; raise exception using errcode='HF999',message='storage queue readable';
- exception when sqlstate 'HF999' then raise; when insufficient_privilege then null; end;
- begin perform public.hf_recording_claim(10); raise exception using errcode='HF999',message='client claimed recordings';
- exception when sqlstate 'HF999' then raise; when insufficient_privilege then null; end;
- begin perform public.hf_recording_status(ca,'bot-qa-1','done',now(),null); raise exception using errcode='HF999',message='client changed recorder status';
- exception when sqlstate 'HF999' then raise; when insufficient_privilege then null; end;
- begin perform 1 from public.hf_recorder_cancellations; raise exception using errcode='HF999',message='recorder queue readable';
  exception when sqlstate 'HF999' then raise; when insufficient_privilege then null; end;
  execute 'reset role';
  perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);
@@ -139,21 +133,9 @@ begin
  assert not public.hf_meet_commit(ca,gen,worker,s1,1,'{"space":{"name":"spaces/other","meet_url":"https://meet.google.com/zzz-zzzz-zzz"}}'), 'stale space commit';
  assert (select meet_space='spaces/one' and meet_url='https://meet.google.com/abc-defg-hij' from public.hf_interviews where id=s1), 'room replaced';
 
- -- Recorder statuses apply in order, only within the owning company, and stop at a final state.
- insert into public.hf_interview_recordings(company_id,interview_id,name,state,planned_start,join_at,meet_url)
-  values(ca,s1,'bot-qa-1','scheduled',future,future-interval '1 minute','https://meet.google.com/abc-defg-hij');
- perform public.hf_recording_status(cb,'bot-qa-1','recording',now(),null);
- assert (select state from public.hf_interview_recordings where name='bot-qa-1')='scheduled', 'cross-company status';
- perform public.hf_recording_status(ca,'bot-qa-1','recording',now()-interval '50 minutes',null);
- perform public.hf_recording_status(ca,'bot-qa-1','waiting',now()-interval '55 minutes',null);
- select * into r from public.hf_interview_recordings where name='bot-qa-1';
- assert r.state='recording' and r.starts_at is not null, 'older status applied';
- perform public.hf_recording_status(ca,'bot-qa-1',null,now(),null);
- assert (select state from public.hf_interview_recordings where name='bot-qa-1')='recording', 'unknown status applied';
- perform public.hf_recording_status(ca,'bot-qa-1','done',now()-interval '30 minutes',null);
- perform public.hf_recording_status(ca,'bot-qa-1','failed',now(),'Synthetic failure');
- select * into r from public.hf_interview_recordings where name='bot-qa-1';
- assert r.state='done' and r.ends_at is not null and r.error is null, 'final state changed';
+ -- Saved recording history remains company-scoped.
+ insert into public.hf_interview_recordings(company_id,interview_id,name,state,starts_at,ends_at)
+  values(ca,s1,'recording-qa-1','done',now()-interval '50 minutes',now()-interval '30 minutes');
  select count(*) into n from public.hf_interview_recordings where company_id=ca and interview_id=s1; assert n=1, 'recording ownership';
  perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);
  execute 'set local role authenticated';
@@ -172,13 +154,9 @@ begin
  assert not exists(select 1 from public.hf_meet_due(ca,'interviews@example.com','{}',10) where id=s2), 'delivered cancellation still due';
  perform public.hf_meet_commit(ca,gen,worker,null,0,'{"release":null}');
 
- -- Finished recordings are claimed once to copy into storage, then queued for storage cleanup when deleted.
+ -- Saved videos are queued for storage cleanup when deleted.
  perform public.hf_google_set(b,cb,'other-company@example.com','g-9','fixture-other');
- select * into r from public.hf_recording_claim(10) c where c.company_id=ca;
- assert r.name='bot-qa-1' and r.interview_id=s1, 'recording claim';
- select count(*) into n from public.hf_recording_claim(10) c where c.company_id=ca; assert n=0, 'claimed twice';
- update public.hf_interview_recordings set storage_key=ca||'/'||s1||'/r1.mp4',storage_claim_until=null where company_id=ca;
- select count(*) into n from public.hf_recording_claim(10) c where c.company_id=ca; assert n=0, 'saved recording claimed';
+ update public.hf_interview_recordings set storage_key=ca||'/'||s1||'/r1.mp4' where company_id=ca;
 
  -- Switching accounts is immediate. The earlier organizer's interviews keep their history but are no longer
  -- synced or edited with the new grant; Gmail import restarts for a different mailbox.
@@ -228,13 +206,9 @@ begin
  select count(*) into n from public.hf_interview_recordings where company_id=ca; assert n=1, 'history kept';
  assert public.hf_gmail_claim(ca) is null, 'gmail claimed after disconnect';
 
- -- Deleting the candidate removes the interview, queues its saved video for deletion and its booked recorder
- -- for cancellation.
- insert into public.hf_interview_recordings(company_id,interview_id,name,state) values(ca,s1,'bot-qa-2','scheduled');
+ -- Deleting the candidate removes the interview and queues its saved video for deletion.
  delete from public.hf_candidates where company_id=ca and id=ka;
  assert exists(select 1 from public.hf_storage_deletions where key=ca||'/'||s1||'/r1.mp4'), 'saved video not queued for deletion';
- assert exists(select 1 from public.hf_recorder_cancellations where bot='bot-qa-2' and company_id=ca)
-  and not exists(select 1 from public.hf_recorder_cancellations where bot='bot-qa-1'), 'recorder cancellation queue';
- raise notice 'PASS: Google connection isolation, membership, leases, stale results, Meet rooms, recorder statuses, recording copy claims, cancellation, account switching, Gmail checkpoints, past edits, disabled members, organizer notification retries, disconnect and storage cleanup.';
+ raise notice 'PASS: Google connection isolation, membership, leases, stale results, Meet rooms, recording isolation, cancellation, account switching, Gmail checkpoints, past edits, disabled members, organizer notification retries, disconnect and storage cleanup.';
 end $$;
 rollback;

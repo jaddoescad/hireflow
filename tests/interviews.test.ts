@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { googleMeetUrl, interviewCalendarTitle, interviewNotificationMessage, interviewTitleFromCalendar, interviewSchema, localDateTime, localInterviewWindow, meetingWindowOpen, type InterviewNotification } from "../src/lib/interviews";
+import { googleMeetUrl, interviewCalendarTitle, interviewNotificationMessage, interviewTitleFromCalendar, interviewSchema, localDateTime, localInterviewWindow, type InterviewNotification } from "../src/lib/interviews";
 test("calendar titles include candidate names without accumulating suffixes", () => {
   assert.equal(interviewCalendarTitle("Interview", "Alex Example"), "Interview — Alex Example");
   assert.equal(interviewCalendarTitle("Interview — Alex Example", "alex example"), "Interview — Alex Example");
@@ -33,14 +33,9 @@ test("only canonical Google Meet links are accepted", () => {
   assert.equal(googleMeetUrl("https://meet.google.com.example.com/abc-defg-hij"), null);
   assert.equal(googleMeetUrl("https://meet.google.com/lookup/abc"), null);
 });
-test("meeting facts are checked from 15 minutes before the start", () => {
-  const starts_at = "2026-09-22T15:00:00.000Z";
-  assert.equal(meetingWindowOpen({ starts_at }, Date.parse("2026-09-22T14:44:00.000Z")), false);
-  assert.equal(meetingWindowOpen({ starts_at }, Date.parse("2026-09-22T14:46:00.000Z")), true);
-});
 test("interviews need a bounded duration, an interviewer and a candidate email", () => {
   const base = { id: crypto.randomUUID(), candidate_id: crypto.randomUUID(), title: "Interview", timezone: "America/Toronto",
-    starts_at: "2026-09-22T15:00:00.000Z", ends_at: "2026-09-22T15:30:00.000Z", interviewer_ids: [crypto.randomUUID()], auto_record: true, candidate_email: " Alex@Example.com " };
+    starts_at: "2026-09-22T15:00:00.000Z", ends_at: "2026-09-22T15:30:00.000Z", interviewer_ids: [crypto.randomUUID()], candidate_email: " Alex@Example.com " };
   assert.equal(interviewSchema.parse(base).version, 0);
   assert.equal(interviewSchema.parse(base).candidate_email, "alex@example.com");
   assert.equal(interviewSchema.parse(base).allow_another, false);

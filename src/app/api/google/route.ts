@@ -4,8 +4,6 @@ import { companyMember, googleAvailable } from "@/lib/google";
 import { releaseGoogle, syncMeet } from "@/lib/meet";
 import { syncGmail } from "@/lib/gmail";
 import { adminDb } from "@/lib/supabase/server";
-import { recorderAvailable } from "@/lib/recall";
-import { recordingStorageConfigured } from "@/lib/recording-storage";
 import { sameOrigin, bodyJson, failure } from "@/lib/http";
 export const maxDuration = 240;
 // Connection status for any member; credentials never leave the server.
@@ -25,7 +23,6 @@ export async function GET(request: Request) {
       synced_at: meet.data?.synced_at || null, last_error: connected ? meet.data?.last_error || null : null,
       instant_updates: connected && !!meet.data?.events_subscription && Date.parse(meet.data.events_expire_at || "") > Date.now(),
       events_error: connected ? meet.data?.events_error || null : null,
-      recorder: recorderAvailable() && recordingStorageConfigured(),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) { return failure(e); }
 }

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { LoaderCircle, Play, Search, Video } from "lucide-react";
 import type { Candidate, Workspace } from "@/lib/types";
 import type { Recording } from "@/lib/interviews";
-import { recordingStatus } from "@/lib/recorder";
+import { recordingStatus } from "@/lib/recording-status";
 import { Modal } from "./primitives";
 import "./recordings.css";
 
@@ -31,6 +31,7 @@ function useRecordings(company: string, candidate?: string) {
 
 // Saved videos stream from HireFlow storage through a short-lived link issued after a membership check.
 function Player({ data, recording }: { data: Workspace; recording: Row }) {
+  const [transcript,setTranscript] = useState<NonNullable<Recording["transcript"]>>([]);
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -39,13 +40,14 @@ function Player({ data, recording }: { data: Workspace; recording: Row }) {
     fetch(`/api/recordings/play?${params}`, { cache: "no-store" }).then(async r => {
       const value = await r.json();
       if (!r.ok) throw new Error(value.error || "Could not load the recording.");
-      if (live) setSource(value.url);
+      if (live) {setSource(value.url);setTranscript(value.transcript||[]);}
     }).catch(e => { if (live) setError((e as Error).message); });
     return () => { live = false; };
   }, [data.company, recording.name]);
   return <>
-    <div className="recording-player">{source ? <video src={source} controls autoPlay playsInline /> : !error && <p className="recording-loading"><LoaderCircle size={20} className="spin" /></p>}</div>
+    <div className="recording-player">{source ? <video src={source} controls autoPlay playsInline /> : !error && !transcript.length && <p className="recording-loading"><LoaderCircle size={20} className="spin" /></p>}</div>
     {error && <p className="error" role="alert">{error}</p>}
+    {!!transcript.length && <div className="recording-transcript"><h3>Transcript</h3>{transcript.map((line,i)=><p key={i}><strong>{line.speaker_name}</strong> <small>{Math.floor(line.start_time/60)}:{String(Math.floor(line.start_time%60)).padStart(2,"0")}</small><br/>{line.text}</p>)}</div>}
   </>;
 }
 
@@ -56,9 +58,9 @@ function RecordingGrid({ data, rows, onCandidate }: { data: Workspace; rows: Row
       {rows.map(r => {
         const candidate = data.candidates.find(c => c.id === r.interview.candidate_id);
         const length = minutes(r);
-        const ready = !!r.storage_key;
+        const ready = !!r.storage_key || !!r.fireflies_id;
         return <article className="recording-card" key={r.name}>
-          <button className="recording-thumb" disabled={!ready} onClick={() => setPlaying(r)} aria-label={`Play ${r.interview.title}${candidate ? ` with ${candidate.name}` : ""}`}>
+          <button className="recording-thumb" disabled={!ready} onClick={() => setPlaying(r)} aria-label={`${r.has_video || r.storage_key ? "Play" : "Read transcript of"} ${r.interview.title}${candidate ? ` with ${candidate.name}` : ""}`}>
             {ready ? <span className="recording-play"><Play size={22} fill="currentColor" /></span> : <span className="recording-pending"><LoaderCircle size={18} className="spin" />{recordingStatus(r)}</span>}
             {length && <span className="recording-length">{length} min</span>}
           </button>
@@ -108,10 +110,10 @@ export function Recordings({ data, onCandidate }: { data: Workspace; onCandidate
     <div className="content-body recordings-body">
       {error && <p className="error" role="alert">{error}</p>}
       {!rows ? <p className="muted">Loading recordings…</p>
-        : !rows.length ? <div className="recording-empty"><Video size={30} /><h3>No recordings yet</h3><p>Schedule an interview from Calendar with recording on. Let the recorder in when you admit the candidate, and the video appears here after the call.</p></div>
+        : !rows.length ? <div className="recording-empty"><Video size={30} /><h3>No recordings yet</h3><p>Recorded interviews appear here after Fireflies finishes processing.</p></div>
         : !shown.length ? <p className="muted">No recordings match “{search}”.</p>
         : <RecordingGrid data={data} rows={shown} onCandidate={onCandidate} />}
-      {!!rows?.length && <p className="recording-note">Recordings are saved to HireFlow a few minutes after each call ends, so everyone on your team can watch.</p>}
+      {!!rows?.length && <p className="recording-note">Recordings and transcripts are available to enabled company members. Fireflies videos require an active connection and remain subject to Fireflies retention.</p>}
     </div>
   </>;
 }
