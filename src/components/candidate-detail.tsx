@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import type { Activity, Candidate, Workspace } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
-import { Field, Modal, when, Empty } from "./primitives";
+import { Field, Modal, RolePill, when, Empty } from "./primitives";
 import { InterviewScorecard } from "./interview-scorecard";
 import { InterviewEditor } from "./interviews";
 import { CandidateRecordings } from "./recordings";
@@ -314,9 +314,8 @@ export function CandidateDetail({
     >
       <div className="candidate-head">
         <p className="candidate-role">
-          {[c.job_title || "Role not specified", c.experience]
-            .filter(Boolean)
-            .join(" · ")}
+          <RolePill role={c.job_title} />
+          {c.experience && <span>{c.experience}</span>}
         </p>
         <div className="candidate-contact">
           {c.email ? (

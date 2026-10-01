@@ -20,6 +20,18 @@ export function Avatar({ name }: { name: string }) {
     </span>
   );
 }
+const roleColors = 8;
+// The same role always gets the same color, so candidates for one position are easy to spot.
+export function RolePill({ role }: { role: string }) {
+  const name = role.trim();
+  let hash = 0;
+  for (const ch of name.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return (
+    <span className={`role-pill ${name ? `role-${hash % roleColors}` : "role-none"}`}>
+      {name || "Role not specified"}
+    </span>
+  );
+}
 export function Modal({
   title,
   onClose,

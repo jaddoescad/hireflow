@@ -12,7 +12,7 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import type { Workspace, Candidate, Activity } from "@/lib/types";
-import { Avatar, Empty, when } from "./primitives";
+import { Avatar, Empty, RolePill, when } from "./primitives";
 
 function relativeDate(value: string) {
   const date = new Date(value);
@@ -330,7 +330,7 @@ export function HiringBoard({
                         <Avatar name={c.name} />
                         <div>
                           <strong>{c.name}</strong>
-                          <span>{c.job_title || "Role not specified"}</span>
+                          <RolePill role={c.job_title} />
                         </div>
                         <span
                           className={`candidate-score-badge ${c.score_average == null ? "unrated" : c.score_average >= 8 ? "high" : c.score_average >= 6 ? "medium" : "low"}`}
