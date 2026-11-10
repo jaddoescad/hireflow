@@ -77,6 +77,15 @@ The core hiring workspace works without connecting external services.
 | Fireflies | Automatic interview video recording and transcription; company-scoped access | Connect a company API key in Integrations, enable video in Fireflies, and admit its recorder in Meet |
 | SMTP | Team invitation emails and interview organizer confirmations | Set the `SMTP_*` server environment variables |
 
+For Facebook Lead Ads, pass the trigger's **Step Output** through a Code step that
+returns `"base64:" + Buffer.from(inputData.response).toString("base64")`, then map that
+plain text output to the intake field `form_response`. The encoding prevents Zapier
+from expanding the JSON into individual mapped fields. HireFlow stores every
+submitted question and answer as a regular note in candidate **Notes**. New or renamed
+questions do not need individual mappings. Native Meta `field_data` arrays and
+unprefixed JSON are also supported. Keep contact, source ID, and form metadata
+mappings; the integration token determines the company, never the form payload.
+
 See [the integration guide](docs/INTEGRATIONS.md) for payload mapping, callback URLs, secrets, and verification commands. HireFlow imports email; it does not send it. Ambiguous conversation matches remain unassigned for manual review.
 
 The current hosted Google OAuth app is restricted to its configured Google Workspace organization. Other organizations need their own OAuth configuration or an appropriately configured and verified external Google app. This restriction does not prevent using HireFlow's core hiring workspace.

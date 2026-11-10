@@ -21,13 +21,22 @@ export function Avatar({ name }: { name: string }) {
   );
 }
 const roleColors = 8;
-// The same role always gets the same color, so candidates for one position are easy to spot.
+const knownRoleColors: Record<string, number> = {
+  painter: 0,
+  helper: 1,
+  "project manager": 2,
+  "crew leader": 3,
+  "professional painter": 5,
+  "google meet qa": 7,
+};
 export function RolePill({ role }: { role: string }) {
   const name = role.trim();
+  const normalized = name.toLowerCase();
   let hash = 0;
-  for (const ch of name.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  for (const ch of normalized) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const color = knownRoleColors[normalized] ?? hash % roleColors;
   return (
-    <span className={`role-pill ${name ? `role-${hash % roleColors}` : "role-none"}`}>
+    <span className={`role-pill ${name ? `role-${color}` : "role-none"}`}>
       {name || "Role not specified"}
     </span>
   );

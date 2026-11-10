@@ -113,6 +113,11 @@ try {
     name: "Webhook Candidate",
     phone: "6135550456",
     email: "webhook@example.com",
+    job_title: "Project Manager",
+    form_response: JSON.stringify({ raw: {
+      describe_your_project_management_experience: "Synthetic project management answer",
+      describe_your_painting_experience: "Synthetic painting answer",
+    } }),
   };
   assert.equal((await request("/api/webhooks/intake", payload)).status, 401);
   const ingested = await request("/api/webhooks/intake", payload, undefined, {
@@ -124,6 +129,18 @@ try {
   });
   assert.equal(duplicate.data.id, ingested.data.id);
   assert.equal(duplicate.data.duplicate, true);
+  const applicationNotes = await request(
+    `/api/activities?company=${cid}&candidate=${ingested.data.id}&notes=1`,
+    undefined, a,
+  );
+  assert.equal(applicationNotes.status, 200);
+  assert.equal(applicationNotes.data.activities.length, 1);
+  assert.match(applicationNotes.data.activities[0].body, /Synthetic project management answer/);
+  assert.match(applicationNotes.data.activities[0].body, /Synthetic painting answer/);
+  assert.equal((await request(
+    `/api/activities?company=${cid}&candidate=${ingested.data.id}&notes=1`,
+    undefined, b,
+  )).status, 403);
   const event = {
     id: "event",
     type: "message.received",

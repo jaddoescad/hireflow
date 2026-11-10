@@ -8,6 +8,7 @@
 - Preserve unrelated applications and data during infrastructure changes.
 - Never commit credentials, personal information, applicant data, or private documents, including in `AGENTS.md`. Keep examples synthetic and integrations server-side.
 - Verify access isolation, invitations, webhook retries, and the complete hiring flow before claiming completion.
+- Production releases must use a committed source tree. Compare it with the last production deployment before releasing; an older Git HEAD can omit features already deployed from local changes. Run the application-answer tests and the HTTP intake-to-Notes check before releasing intake changes.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

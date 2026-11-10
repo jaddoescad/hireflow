@@ -416,12 +416,12 @@ export function CandidateDetail({
           <dd>{c.source}</dd>
           <dt>Added</dt>
           <dd>{when(c.created_at)}</dd>
-          {Object.entries(c.attributes).map(([k, v]) => (
-            <div key={k}>
-              <dt>{k}</dt>
-              <dd>{String(v ?? "—")}</dd>
-            </div>
-          ))}
+          {typeof c.attributes.Form === "string" && c.attributes.Form && (
+            <>
+              <dt>Form</dt>
+              <dd>{c.attributes.Form}</dd>
+            </>
+          )}
         </dl>
       ) : (
         <>

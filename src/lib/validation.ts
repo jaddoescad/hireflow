@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { parseFormAnswers } from "./form-answers";
 export function normalizePhone(value: string) {
   if (!value.trim()) return "";
   const phone = parsePhoneNumberFromString(value, "CA");
@@ -92,15 +93,33 @@ export const intakeSchema = z
     job_title: candidate.job_title,
     experience: candidate.experience,
     tags: candidate.tags,
+    form_response: z.unknown().transform((input, ctx) => {
+      try {
+        return parseFormAnswers(input);
+      } catch {
+        ctx.addIssue({ code: "custom", message: "Invalid complete form response." });
+        return z.NEVER;
+      }
+    }),
     attributes: z
       .record(
         z.string().max(100),
-        z.union([z.string().max(2000), z.number(), z.boolean(), z.null()]),
+        z.union([z.string().max(20000), z.number(), z.boolean(), z.null()]),
       )
       .default({}),
   })
+  .superRefine((value, ctx) => {
+    if (value.source === "Meta" && value.attributes.Form && !value.form_response.length)
+      ctx.addIssue({
+        code: "custom",
+        path: ["form_response"],
+        message: "The complete Meta form response is required. Retry with all application answers.",
+      });
+  })
   .transform((value) => {
-    const attributes = { ...value.attributes };
+    const { form_response, ...candidateValue } = value;
+    const attributes: Record<string, unknown> = { ...value.attributes };
+    if (form_response.length) attributes["Form answers"] = form_response;
     const tags = new Set(value.tags);
     let phone = "";
     try {
@@ -117,7 +136,7 @@ export const intakeSchema = z
     if (attributes["Transportation Answer"] === "Yes")
       tags.add("Own transportation");
     return {
-      ...value,
+      ...candidateValue,
       phone,
       attributes,
       tags: candidate.tags.parse([...tags]),
