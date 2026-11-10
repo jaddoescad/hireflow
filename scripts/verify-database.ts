@@ -357,8 +357,7 @@ try {
     ).ignored,
     true,
   );
-  await ok(
-    mutate(currentAdmin, ca.id, "candidate_save", {
+  const duplicateContact = await mutate(currentAdmin, ca.id, "candidate_save", {
       stage_id: stages[0].id,
       name: "Shared Phone",
       phone: "+16135550123",
@@ -366,8 +365,8 @@ try {
       job_title: "Painter",
       experience: "",
       tags: [],
-    }),
-  );
+    });
+  assert(duplicateContact.error, "Duplicate contacts must be rejected");
   await ok(
     admin.rpc("hf_ingest", {
       cid: ca.id,
@@ -385,7 +384,7 @@ try {
           .eq("company_id", ca.id),
       )
     )[0].candidate_id,
-    null,
+    c.id,
   );
   console.log(
     "PASS: company isolation, server-only writes/secrets, cross-company FKs, invite identity/idempotency, multi-company membership, immediate disable, concurrent last-admin protection, stages/notes, intake retries, Quo isolation and ambiguous matching.",
