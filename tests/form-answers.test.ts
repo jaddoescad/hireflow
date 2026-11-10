@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { intakeSchema } from "../src/lib/validation";
-import { parseFormAnswers } from "../src/lib/form-answers";
+import { parseFormAnswers, formatFormAnswer } from "../src/lib/form-answers";
 
 test("complete Zapier output preserves new questions, choices, empty and long answers", () => {
   const written = "First line\n" + "Detailed answer. ".repeat(200);
@@ -64,4 +64,15 @@ test("Meta form applications cannot silently succeed without their complete resp
     email: "alex@example.com", attributes: { Form: "Synthetic hiring form" } };
   assert.equal(intakeSchema.safeParse(application).success, false);
   assert.equal(intakeSchema.safeParse({ ...application, source: "Hiring Sheet" }).success, true);
+});
+
+test("raw Meta choices are readable while written answers remain verbatim", () => {
+  assert.equal(formatFormAnswer("What is your availability? (select all that apply)",
+    "weekday_daytime|flexible_schedule|weekends"), "Weekday daytime, Flexible schedule, Weekends");
+  assert.equal(formatFormAnswer("Painting experience", "3_to_5"), "3–5 years");
+  assert.equal(formatFormAnswer("Describe your experience", "weekday_daytime|my_custom_answer"),
+    "weekday_daytime|my_custom_answer");
+  assert.deepEqual(parseFormAnswers({raw: {"what_is_your_availability?_(select_all_that_apply)":
+    "weekday_daytime,weekday_evenings"}}), [{question: "What is your availability? (select all that apply)",
+    answer: "Weekday daytime, Weekday evenings"}]);
 });

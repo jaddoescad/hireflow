@@ -114,12 +114,16 @@ try {
     phone: "6135550456",
     email: "webhook@example.com",
     job_title: "Project Manager",
+    attributes: { Form: "Synthetic hiring form" },
     form_response: JSON.stringify({ raw: {
       describe_your_project_management_experience: "Synthetic project management answer",
       describe_your_painting_experience: "Synthetic painting answer",
+      "what_is_your_availability?_(select_all_that_apply)": "weekday_daytime|flexible_schedule|weekends",
     } }),
   };
   assert.equal((await request("/api/webhooks/intake", payload)).status, 401);
+  assert.equal((await request("/api/webhooks/intake", { ...payload, form_response: undefined },
+    undefined, { Authorization: `Bearer ${token}` })).status, 400);
   const ingested = await request("/api/webhooks/intake", payload, undefined, {
     Authorization: `Bearer ${token}`,
   });
@@ -137,6 +141,8 @@ try {
   assert.equal(applicationNotes.data.activities.length, 1);
   assert.match(applicationNotes.data.activities[0].body, /Synthetic project management answer/);
   assert.match(applicationNotes.data.activities[0].body, /Synthetic painting answer/);
+  assert.match(applicationNotes.data.activities[0].body, /Weekday daytime, Flexible schedule, Weekends/);
+  assert(!applicationNotes.data.activities[0].body.includes("weekday_daytime"));
   assert.equal((await request(
     `/api/activities?company=${cid}&candidate=${ingested.data.id}&notes=1`,
     undefined, b,

@@ -1,5 +1,28 @@
 export type FormAnswer = { question: string; answer: string };
 
+const choiceLabels: Record<string, string> = {
+  weekday_daytime: "Weekday daytime", weekday_evenings: "Weekday evenings",
+  flexible_schedule: "Flexible schedule", weekends: "Weekends",
+  yes: "Yes", no: "No", immediately: "Immediately",
+  within_1_week: "Within 1 week", within_2_weeks: "Within 2 weeks",
+  "within_3–4_weeks": "Within 3–4 weeks", more_than_4_weeks_from_now: "More than 4 weeks from now",
+  less_than_1_year: "Less than 1 year", "1–2_years": "1–2 years",
+  "3–5_years": "3–5 years", "6–10_years": "6–10 years", more_than_10_years: "More than 10 years",
+  less_than_1: "Less than 1 year", "1_to_2": "1–2 years", "3_to_5": "3–5 years", "5_plus": "5+ years",
+  crew_leader: "Crew Leader", helper: "Helper", professional_painter: "Professional Painter",
+  project_manager: "Project Manager", "subcontractor_(multiple_crews)": "Subcontractor (multiple crews)",
+  "1_to_2_weeks": "1–2 weeks", "3_plus_weeks": "3+ weeks",
+  "25_to_30": "$25–$30", "30_to_35": "$30–$35", "35_to_40": "$35–$40",
+};
+
+/** Decode known choice fields only; applicants' written answers stay verbatim. */
+export function formatFormAnswer(question: string, answer: string): string {
+  const key = question.toLowerCase().replaceAll("_", " ");
+  if (!/^(what is your availability|how many years of professional painting experience|can you reliably travel|when could you start|painting experience$|best fit position$|crew lead experience$|transportation$|start availability$|hourly pay expectation$)/.test(key))
+    return answer;
+  return answer.split(/[|,]/).map((choice) => choiceLabels[choice.trim()] ?? choice.trim()).join(", ");
+}
+
 /** Read the complete Meta/Zapier response, without a per-form field allowlist. */
 export function parseFormAnswers(input: unknown): FormAnswer[] {
   if (input === undefined) return [];
@@ -39,6 +62,7 @@ export function parseFormAnswers(input: unknown): FormAnswer[] {
     const answer = values.map((v) => String(v ?? "")).join(", ");
     if (answer.length > 20000) throw new Error("Form answer is too long.");
     const question = key.replaceAll("_", " ").replace(/\s+/g, " ").trim();
-    return { question: question.charAt(0).toUpperCase() + question.slice(1), answer };
+    return { question: question.charAt(0).toUpperCase() + question.slice(1),
+      answer: formatFormAnswer(question, answer) };
   });
 }
