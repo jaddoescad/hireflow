@@ -20,6 +20,7 @@ begin
  settings:='{"forms":[{"id":"101","name":"Example form","applicant_type":"Interior","job_title":"Painter","sms":"Synthetic acknowledgement"}],"notification_email":"hiring@example.com","sender_name":"Example Hiring"}';
  perform public.hf_meta_set(owner_id,cid,'connect',connection);
  perform public.hf_meta_set(owner_id,cid,'settings',settings);
+ perform pg_temp.meta_denied(format('select public.hf_meta_set(%L,%L,''settings'',%L)',owner_id,cid,settings||'{"generation":"2020-01-01T00:00:00Z"}'::jsonb));
  perform pg_temp.meta_denied(format('select public.hf_meta_set(%L,%L,''pause'',''{}'')',outsider,cid));
  perform pg_temp.meta_denied(format('select public.hf_meta_set(%L,%L,''connect'',%L)',outsider,other_cid,connection));
  perform pg_temp.meta_check(not public.hf_meta_enqueue('999','101','201'),'Unknown Pages are ignored');
@@ -72,6 +73,11 @@ begin
  result:=public.hf_meta_step(cid,'204',job.lease_id,'ingest',payload);
  perform pg_temp.meta_check(result->>'sms_state'='skipped','Historical catch-up does not text old applicants');
  perform public.hf_meta_step(cid,'204',job.lease_id,'release');
+ perform public.hf_meta_enqueue('301','101','207');
+ select * into job from public.hf_meta_claim(cid);
+ update public.hf_meta_leads set attempts=10,email_state='sending',lease_until=now()-interval '1 minute' where company_id=cid and lead_id='207';
+ perform public.hf_meta_claim(cid);
+ perform pg_temp.meta_check((select state='failed' and email_state='uncertain' from public.hf_meta_leads where company_id=cid and lead_id='207'),'An exhausted crashed lease becomes visible for review');
  perform public.hf_meta_enqueue('301','101','205');
  select * into job from public.hf_meta_claim(cid);
  update public.hf_members set enabled=false where company_id=cid and user_id=owner_id;

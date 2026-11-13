@@ -70,9 +70,10 @@ export async function POST(request: Request) {
         if (!original) throw new Error("Select a form from this Facebook Page.");
         form.name = original.name;
       }
-      payload = settings;
+      payload = { ...settings, generation: c.updated_at };
     }
     if (action === "activate") {
+      payload = { generation: c.updated_at };
       const settings = metaSettingsSchema.parse(c.settings);
       if (settings.notification_email && (!process.env.SMTP_HOST || !process.env.SMTP_FROM)) throw new Error("Configure hiring notification email first.");
       if (settings.forms.some(f => f.sms)) {
