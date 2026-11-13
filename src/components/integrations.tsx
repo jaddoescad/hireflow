@@ -5,6 +5,7 @@ import type { Workspace } from "@/lib/types";
 import type { Mutate } from "./hiring-board";
 import { Field, when } from "./primitives";
 import { useSave } from "./settings";
+import { MetaIntegration } from "./meta-integration";
 
 // Shows the outcome of Google's consent screen on the page that started it.
 export function GoogleResult() {
@@ -96,6 +97,7 @@ export function Integrations({
             Saved.
           </div>
         )}
+        <MetaIntegration key={data.company!.id} company={data.company!.id} name={data.company!.name} />
         <section className="panel">
           <div className="panel-heading">
             <h2>
@@ -194,8 +196,7 @@ export function Integrations({
           </div>
           <div className="panel-form">
             <p>
-              Add a Webhooks by Zapier POST action after your existing Google
-              Sheets action.
+              Connect other application sources using an authenticated webhook.
             </p>
             <Field label="Webhook URL">
               <input value={`${base}/api/webhooks/intake`} readOnly />
@@ -217,8 +218,7 @@ export function Integrations({
             </button>
             {data.integration?.intake_configured && (
               <small>
-                Replacing the token disconnects the old Zap until you update its
-                Authorization header.
+                Replacing the token disconnects existing webhook senders until you update their Authorization header.
               </small>
             )}
             {key && (

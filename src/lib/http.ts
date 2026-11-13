@@ -18,7 +18,7 @@ export function sameOrigin(request: Request) {
   if (!origin || origin !== new URL(process.env.APP_URL || request.url).origin)
     throw new Error("Request origin is not allowed.");
 }
-export async function bodyJson(request: Request, max = 65536) {
+export async function bodyText(request: Request, max = 65536) {
   const reader = request.body?.getReader();
   if (!reader) throw new Error("Request body is required");
   let size = 0;
@@ -33,5 +33,8 @@ export async function bodyJson(request: Request, max = 65536) {
     }
     chunks.push(value);
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  return Buffer.concat(chunks).toString("utf8");
+}
+export async function bodyJson(request: Request, max = 65536) {
+  return JSON.parse(await bodyText(request, max));
 }

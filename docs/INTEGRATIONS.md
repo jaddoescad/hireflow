@@ -1,8 +1,24 @@
 # Integrations
 
-## Zapier intake
+## Direct Facebook Lead Ads
 
-The existing active Zap is **Interior + Exterior Hiring | Facebook Leads → Hiring Sheet**. Preserve its Google Sheets step. The deployed Zap has a Webhooks by Zapier POST action after it, before delay/outbound communication actions. Use the same ordering when setting up another company.
+HireFlow supports direct Meta Page webhooks at `/api/webhooks/meta`. An enabled company admin connects a Page in **Integrations → Facebook Lead Ads**, using a Meta app ID, app secret, Page ID and Page access token. Use `leads_retrieval` and `pages_manage_metadata`, plus the Page permissions required by Meta for the selected assets. The connection verifies the token's app and reads the Page's forms. The Page can belong to only one HireFlow company. App secrets and Page tokens are encrypted using the existing server `GMAIL_TOKEN_KEY`; they never return to browsers.
+
+Load the Page's forms, explicitly select hiring forms, set applicant types and optional position overrides, and copy existing acknowledgement messages into each form. Unselected forms are ignored. Set the hiring notification inbox and sender name. Blank email/text settings disable those notifications. These rules organize incoming applications; they make no hiring decisions. All submitted fields are retained in candidate Notes without a question allowlist.
+
+Configure the Meta app's **Page** webhook with the callback URL and verification token shown in HireFlow, enable **leadgen**, and subscribe that same app to the Page's `leadgen` field. Preserve existing Page subscriptions. If the app's Page callback serves another integration, use a separate app instead of replacing it. Meta app review, business verification and lead access requirements depend on the connected assets and access level; verify real lead delivery before switching.
+
+New connections start in **verification mode**: applications are saved but no email or text is sent. Keep the old Zap active while verifying a synthetic lead, every question/answer, role mapping, Notes, repeated delivery, and company isolation. For cutover, turn off the old Zap, then enable direct delivery. Activation checks both app and Page subscriptions. Only newly created submissions received after activation qualify for messages; historical catch-up and submissions already saved by the Zap never send notifications. Check leads submitted during the cutover interval and handle any acknowledgements manually. Do not delete the old Zap until direct delivery is verified.
+
+The webhook validates HMAC-SHA256 over the raw body and queues durable IDs before acknowledging. Company identity comes from the stored Page mapping. `/api/cron/meta` runs every minute using `CRON_SECRET`; it processes leased jobs and catches up each Page at least every five minutes, overlapping the last successful checkpoint by an hour. The first catch-up covers 24 hours. A bounded or failed catch-up leaves its checkpoint unchanged and shows an error; narrow the source/import older leads separately if a backlog exceeds that bound. Source `Meta` plus the stable lead ID deduplicates direct webhooks, catch-up and existing generic intake. Workers recheck enabled admin access and current leases in atomic database mutations.
+
+SMTP sends the hiring email with the applicant's address as Reply-To; Quo uses the company's existing phone connection. Saved receipts prevent duplicate sends on retries. A crash or timeout after sending starts is marked **uncertain**, never automatically resent. Check the provider before any manual resend. Explicit rejections and retrieval failures back off and stop after ten processing attempts; admins can retry failed applications. Pausing turns off delivery; disconnecting also stops intake. Disabling the connecting admin stops both until an enabled admin reconnects.
+
+Verification: run `npm test`, `npm run typecheck`, `npm run build`, the rollback-only `supabase/tests/meta-intake.sql`, and `scripts/verify-http.ts` against the running app. HTTP verification creates and removes synthetic accounts/companies and checks both webhook paths through Notes. Test actual Meta delivery and notification receipts before claiming a live migration complete.
+
+## Other application sources
+
+The generic authenticated intake endpoint remains available for other integrations and migration overlap. Existing automation steps remain untouched until direct intake is verified.
 
 POST `/api/webhooks/intake` with JSON and `Authorization: Bearer <company intake token>`. Generate the token in Integrations. This token is company-specific; only its SHA-256 hash is stored. Rotating it invalidates the old token immediately.
 

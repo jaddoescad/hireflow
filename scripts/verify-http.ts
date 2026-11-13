@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
-import { randomBytes, createHmac } from "node:crypto";
+import { randomBytes, createHmac, createHash } from "node:crypto";
+import { sealGmail } from "../src/lib/gmail-crypto";
+import { metaApplication } from "../src/lib/meta";
 import assert from "node:assert/strict";
 const base = process.env.APP_URL || "http://localhost:3100";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -271,8 +273,49 @@ try {
     ).status,
     400,
   );
+  // Direct Meta webhook: signature -> durable queue -> atomic application -> Notes.
+  const pageId = BigInt(`0x${run}`).toString(), formId = pageId + "1", leadId = pageId + "2";
+  const verifyToken = randomBytes(32).toString("hex"), appSecret = randomBytes(16).toString("hex");
+  const form = { id: formId, name: "Synthetic direct hiring form", applicant_type: "Interior", job_title: "Painter", sms: "" };
+  const connected = await admin.rpc("hf_meta_set", { actor: a.id, cid, operation: "connect", payload: {
+    page_id: pageId, page_name: "Synthetic Page", app_id: pageId + "3", verify_hash: createHash("sha256").update(verifyToken).digest("hex"),
+    credentials: sealGmail({ app_secret: appSecret, page_token: "synthetic-test-token", verify_token: verifyToken }),
+  } });
+  assert.equal(connected.error, null);
+  assert.equal((await admin.rpc("hf_meta_set", { actor: a.id, cid, operation: "settings", payload: {
+    forms: [form], notification_email: "", sender_name: "Synthetic Hiring",
+  } })).error, null);
+  const handshake = await fetch(`${base}/api/webhooks/meta?hub.mode=subscribe&hub.verify_token=${verifyToken}&hub.challenge=123456`);
+  assert.equal(handshake.status, 200); assert.equal(await handshake.text(), "123456");
+  const metaEvent = { object: "page", entry: [{ id: pageId, changes: [{ field: "leadgen", value: { page_id: pageId, form_id: formId, leadgen_id: leadId } }] }] };
+  const postMeta = (signature: string) => fetch(`${base}/api/webhooks/meta`, { method: "POST", body: JSON.stringify(metaEvent),
+    headers: { "Content-Type": "application/json", "x-hub-signature-256": signature } });
+  assert.equal((await postMeta("sha256=" + "0".repeat(64))).status, 401);
+  const signed = "sha256=" + createHmac("sha256", appSecret).update(JSON.stringify(metaEvent)).digest("hex");
+  assert.equal((await postMeta(signed)).status, 200);
+  assert.equal((await postMeta(signed)).status, 200);
+  const jobs = await admin.from("hf_meta_leads").select("*").eq("company_id", cid);
+  assert.equal(jobs.data?.length, 1);
+  const claim = await admin.rpc("hf_meta_claim", { cid });
+  assert.equal(claim.error, null);
+  const lease = claim.data[0].lease_id;
+  const direct = await admin.rpc("hf_meta_step", { cid, lead: leadId, worker: lease, operation: "ingest", payload: metaApplication({
+    id: leadId, form_id: formId, created_time: new Date().toISOString(), field_data: [
+      { name: "full_name", values: ["Direct Example"] }, { name: "email", values: ["direct-meta@example.com"] },
+      { name: "brand_new_question", values: ["Synthetic direct answer preserved"] },
+    ],
+  }, form) });
+  assert.equal(direct.error, null); assert.equal(direct.data.email_state, "skipped"); assert.equal(direct.data.sms_state, "skipped");
+  const directNotes = await request(`/api/activities?company=${cid}&candidate=${direct.data.candidate_id}&notes=1`, undefined, a);
+  assert.equal(directNotes.status, 200); assert.match(directNotes.data.activities[0].body, /Synthetic direct answer preserved/);
+  const metaStatus = await request(`/api/meta?company=${cid}`, undefined, a);
+  assert.equal(metaStatus.status, 200); assert(!JSON.stringify(metaStatus.data).includes(appSecret));
+  assert(!JSON.stringify(metaStatus.data).includes("synthetic-test-token"));
+  assert.equal((await request(`/api/meta?company=${cid}`, undefined, b)).status, 400);
+  assert.equal((await request("/api/meta", { company_id: cid, action: "pause" }, b)).status, 400);
+  await admin.rpc("hf_meta_step", { cid, lead: leadId, worker: lease, operation: "release" });
   console.log(
-    "PASS: HTTP sessions, origin checks, company authorization, candidate creation, authenticated intake/retries, signed Quo events, secret redaction, invitation acceptance, and membership revocation.",
+    "PASS: HTTP sessions, origin checks, company authorization, candidate creation, authenticated intake/retries, direct Meta signature/queue/Notes/retries, signed Quo events, secret redaction, invitation acceptance, and membership revocation.",
   );
 } finally {
   for (const id of companies) {

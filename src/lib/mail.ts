@@ -27,6 +27,23 @@ export async function sendInvitation(
   return true;
 }
 
+export async function sendApplicationNotification(input: {
+  company_id: string; lead_id: string; to: string; sender_name: string;
+  subject: string; text: string; reply_to?: string;
+}) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_FROM)
+    throw new Error("Hiring notification email is not configured.");
+  const result = await mailTransport().sendMail({
+    from: { name: input.sender_name, address: process.env.SMTP_FROM.match(/<([^<>]+)>$/)?.[1] || process.env.SMTP_FROM },
+    to: { name: "", address: input.to },
+    ...(input.reply_to ? { replyTo: { name: "", address: input.reply_to } } : {}),
+    messageId: `<meta-${input.company_id}-${input.lead_id}@${new URL(process.env.APP_URL!).hostname}>`,
+    subject: input.subject, text: input.text,
+  });
+  if (!result.accepted.length || result.rejected.length) throw new Error("Hiring notification was not accepted.");
+  return result.messageId;
+}
+
 export async function sendInterviewNotification(session: InterviewNotification) {
   if (!process.env.SMTP_HOST || !process.env.SMTP_FROM)
     throw new Error("Organizer email delivery is not configured.");
