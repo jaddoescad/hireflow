@@ -7,7 +7,7 @@ import { sealGmail, openGmail } from "@/lib/gmail-crypto";
 import { hash } from "@/lib/crypto";
 import { bodyJson, sameOrigin, failure } from "@/lib/http";
 import { metaId, metaSettingsSchema, type MetaCredentials } from "@/lib/meta";
-import { checkMetaConnection, listMetaForms, metaGet } from "@/lib/meta-api";
+import { checkMetaConnection, listMetaForms } from "@/lib/meta-api";
 import { pollMetaConnection, processMetaLeads } from "@/lib/meta-sync";
 
 export const maxDuration = 120;
@@ -80,15 +80,9 @@ export async function POST(request: Request) {
         const quo = await db.from("hf_integrations").select("quo_api_key,quo_phone,quo_phone_id").eq("company_id", company).single();
         if (quo.error || !quo.data?.quo_api_key || !quo.data.quo_phone || !quo.data.quo_phone_id) throw new Error("Connect Quo first.");
       }
-      // Activation only checks subscriptions. It never overwrites another app's callback or Page fields.
-      const [app, page] = await Promise.all([
-        metaGet<{ data: { object: string; callback_url: string; fields: { name: string }[]; active: boolean }[] }>(`${c.app_id}/subscriptions`, `${c.app_id}|${credentials.app_secret}`),
-        metaGet<{ data: { id: string; subscribed_fields?: string[] }[] }>(`${c.page_id}/subscribed_apps`, credentials.page_token),
-      ]);
-      const callback = `${new URL(process.env.APP_URL!).origin}/api/webhooks/meta`;
-      if (!app.data.some(s => s.object === "page" && s.active && s.callback_url === callback && s.fields.some(f => f.name === "leadgen")) ||
-          !page.data.some(p => p.id === c.app_id && p.subscribed_fields?.includes("leadgen")))
-        throw new Error("Finish the Meta webhook setup and subscribe this Page to leadgen before enabling delivery.");
+      // Direct API sync is sufficient; Page administration for push subscriptions is optional.
+      if (!c.last_polled_at || c.last_error || Date.parse(c.last_polled_at) < Date.parse(c.updated_at))
+        throw new Error("Sync Facebook successfully after saving the hiring forms, then enable delivery.");
     }
     const saved = await db.rpc("hf_meta_set", { actor: user.id, cid: company, operation: action, payload });
     if (saved.error) throw new Error("Could not update Facebook settings. Check your admin access.");

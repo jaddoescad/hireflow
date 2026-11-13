@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   if (!secret || actual.length !== expected.length || !timingSafeEqual(actual, expected)) return new NextResponse("Unauthorized", { status: 401 });
   const db = adminDb();
   const due = await db.from("hf_meta_connections").select("company_id").not("credentials", "is", null)
-    .or(`last_polled_at.is.null,last_polled_at.lt.${new Date(Date.now() - 300000).toISOString()}`)
+    .or(`last_polled_at.is.null,last_polled_at.lt.${new Date(Date.now() - 45000).toISOString()}`)
     .order("last_polled_at", { nullsFirst: true }).limit(2);
   if (due.error) return NextResponse.json({ error: "Could not load Meta connections." }, { status: 503 });
   let failed = 0;

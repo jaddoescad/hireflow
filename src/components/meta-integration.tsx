@@ -58,11 +58,11 @@ export function MetaIntegration({ company, name }: { company: string; name: stri
     <div className="panel-heading">
       <h2><Link2 size={18} /> Facebook Lead Ads</h2>
       <span className={`status ${status?.connected ? "enabled" : "disabled"}`}>
-        {status?.active ? "Direct delivery on" : status?.connected ? "Verification mode" : "Not connected"}
+        {status?.active ? "Direct sync on" : status?.connected ? "Verification mode" : "Not connected"}
       </span>
     </div>
     <div className="panel-form">
-      <p>Receive hiring applications directly from Facebook. Every question and answer is saved to Notes. Choose the hiring forms, hiring inbox and application acknowledgement texts here.</p>
+      <p>Sync hiring applications directly from Facebook about once a minute. Every question and answer is saved to Notes. Choose the hiring forms, hiring inbox and application acknowledgement texts here.</p>
       {error && <p className="error" role="alert">{error}</p>}
       {message && <p className="notice" role="status">{message}</p>}
       {status?.connected && <>
@@ -94,8 +94,8 @@ export function MetaIntegration({ company, name }: { company: string; name: stri
         </div>
         <button className="primary" disabled={busy || !settings.forms.length} onClick={() => void action("settings", { settings })}>Save hiring forms and messages</button>
         <details>
-          <summary>Meta webhook setup</summary>
-          <p>In your Meta app’s Webhooks settings, choose Page, enter this callback and verification token, then subscribe to leadgen. Subscribe the same app to this Facebook Page. Use a dedicated app if the existing Page callback serves another integration.</p>
+          <summary>Optional Meta webhook setup</summary>
+          <p>Direct sync works with the saved Page connection. To also receive push events, configure this callback and verification token for the Meta app’s Page leadgen webhook and subscribe the app to this Page. This optional setup requires Page administrative access. Preserve callbacks used by other integrations.</p>
           <Field label="Callback URL"><input value={status.callback_url} readOnly /></Field>
           <Field label="Verification token"><input value={status.verify_token || ""} readOnly /></Field>
         </details>

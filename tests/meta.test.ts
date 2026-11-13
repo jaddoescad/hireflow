@@ -110,3 +110,42 @@ test("delivery retries do not replay sent or uncertain messages, and revoked lea
   assert.equal(timeout.job.email_state, "uncertain"); assert.equal(timeout.job.sms_state, "uncertain");
   const rejected = worker({ email: "sent", quoStatus: 429 }); await rejected.run(); assert.equal(rejected.job.sms_state, "pending");
 });
+
+test("direct polling uses company form IDs, overlaps checkpoints, and never advances an incomplete sync", async () => {
+  let enabled = true, incomplete = false;
+  const apiCalls: { path: string; params: Record<string, string> }[] = [];
+  const writes: { name: string; args: Record<string, any> }[] = [];
+  const filters: unknown[][] = [];
+  const db = {
+    from(table: string) { return { select() { return this; }, not() { return this; },
+      eq(...args: unknown[]) { filters.push([table, ...args]); return this; },
+      async single() { return { data: table === "hf_members" ? { enabled, role: "admin" } : {
+        credentials: "encrypted", company_id: "company", connected_by: "owner", page_id: "301",
+        settings: { forms: [form] }, last_polled_at: "2026-11-12T20:00:00Z", updated_at: "2026-11-12T18:00:00Z",
+      } }; },
+    }; },
+    async rpc(name: string, args: Record<string, any>) { writes.push({ name, args }); return { data: true }; },
+  };
+  const module = loadModule("../src/lib/meta-sync.ts", {
+    "./supabase/server": { adminDb: () => db }, "./meta": meta,
+    "./gmail-crypto": { openGmail: () => ({ page_token: "synthetic-page-token" }) },
+    "./meta-api": { metaGet: async (path: string, token: string, params: Record<string, string>) => {
+      assert.equal(token, "synthetic-page-token"); apiCalls.push({ path, params });
+      if (params.after) throw new Error("Meta is unavailable");
+      return { data: [{ id: "201" }], ...(incomplete ? { paging: { next: "provider-next", cursors: { after: "cursor" } } } : {}) };
+    } },
+  });
+  await module.pollMetaConnection("company");
+  assert.equal(apiCalls[0].path, "101/leads");
+  assert.equal(JSON.parse(apiCalls[0].params.filtering)[0].value, Date.parse("2026-11-12T19:00:00Z") / 1000);
+  assert.deepEqual(JSON.parse(JSON.stringify(writes[0])), { name: "hf_meta_enqueue", args: { page: "301", form_id: "101", lead: "201" } });
+  assert(writes.at(-1)?.args.payload.polled_at);
+  assert(filters.some(f => f[0] === "hf_members" && f[1] === "company_id" && f[2] === "company"));
+  apiCalls.length = 0; writes.length = 0; incomplete = true;
+  await assert.rejects(() => module.pollMetaConnection("company"), /Meta is unavailable/);
+  assert.equal(apiCalls.length, 2); assert.equal(writes.at(-1)?.args.payload.polled_at, undefined);
+  assert.equal(writes.at(-1)?.args.payload.error, "Meta is unavailable");
+  apiCalls.length = 0; writes.length = 0; enabled = false;
+  await assert.rejects(() => module.pollMetaConnection("company"), /no longer enabled/);
+  assert.equal(apiCalls.length, 0); assert.equal(writes.length, 0);
+});
