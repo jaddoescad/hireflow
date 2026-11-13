@@ -93,7 +93,7 @@ export const intakeSchema = z
     job_title: candidate.job_title,
     experience: candidate.experience,
     tags: candidate.tags,
-    form_response: z.unknown().transform((input, ctx) => {
+    form_response: z.unknown().optional().transform((input, ctx) => {
       try {
         return parseFormAnswers(input);
       } catch {
