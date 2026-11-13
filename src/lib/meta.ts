@@ -24,6 +24,10 @@ export const metaLeadSchema = z.object({
   id: metaId, form_id: metaId, created_time: z.string().min(1).max(100),
   ad_id: metaId.optional(),
   field_data: z.array(z.object({ name: z.string().min(1).max(1000), values: z.array(z.string().max(20000)).max(100) })).min(1).max(200),
+  custom_disclaimer_responses: z.array(z.object({
+    checkbox_key: z.string().min(1).max(900),
+    is_checked: z.union([z.literal("1"), z.literal(""), z.literal("0"), z.boolean(), z.literal(0), z.literal(1)]),
+  })).max(100).optional(),
 });
 export type MetaLead = z.infer<typeof metaLeadSchema>;
 
@@ -68,7 +72,10 @@ export function metaApplication(input: unknown, form: MetaForm) {
       "Start Availability": answer(/^(start availability|when could you start)/),
       "Hourly Pay Expectation": answer(/^hourly pay expectation/),
     },
-    form_response: { field_data: lead.field_data },
+    form_response: { field_data: [...lead.field_data, ...(lead.custom_disclaimer_responses || []).map(response => ({
+      name: `Disclaimer checkbox: ${response.checkbox_key}`,
+      values: [response.is_checked === "1" || response.is_checked === 1 || response.is_checked === true ? "Checked" : "Not checked"],
+    }))] },
   });
 }
 

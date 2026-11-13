@@ -30,6 +30,19 @@ test("direct Meta intake retains all answers, normalizes contacts, and routes on
   assert.match(message.text, /Crew Leader/); assert.equal(message.reply_to, result.email);
 });
 
+test("Meta's separate optional disclaimer responses reach Notes and the hiring email", () => {
+  const result = meta.metaApplication({ ...lead, custom_disclaimer_responses: [
+    { checkbox_key: "optional_1", is_checked: "1" }, { checkbox_key: "optional_2", is_checked: "" },
+  ] }, form);
+  const answers = result.attributes["Form answers"] as { question: string; answer: string }[];
+  assert.deepEqual(answers.slice(-2), [
+    { question: "Disclaimer checkbox: optional 1", answer: "Checked" },
+    { question: "Disclaimer checkbox: optional 2", answer: "Not checked" },
+  ]);
+  assert.match(meta.applicationEmail(result, { sender_name: "Example Hiring" }).text, /Disclaimer checkbox: optional 2\nNot checked/);
+  assert.throws(() => meta.metaApplication({ ...lead, custom_disclaimer_responses: [{ checkbox_key: "optional", is_checked: "unexpected" }] }, form));
+});
+
 function loadModule(path: string, modules: Record<string, unknown>, globals: Record<string, unknown> = {}) {
   const exports: Record<string, any> = {};
   vm.runInNewContext(ts.transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), {

@@ -36,5 +36,5 @@ export async function listMetaForms(page: string, token: string) {
   throw new Error("Too many Meta forms. Narrow the connected Page.");
 }
 export async function getMetaLead(id: string, token: string) {
-  return metaLeadSchema.parse(await metaGet(metaId.parse(id), token, { fields: "id,form_id,created_time,ad_id,field_data" }));
+  return metaLeadSchema.parse(await metaGet(metaId.parse(id), token, { fields: "id,form_id,created_time,ad_id,field_data,custom_disclaimer_responses" }));
 }
